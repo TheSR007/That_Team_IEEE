@@ -15,7 +15,7 @@
 | **System Design**    | ✅ Complete | Full microservice architecture designed with clear service boundaries, concurrency strategy (Redis SETNX + PG `SELECT FOR UPDATE`), database schemas, and comprehensive API contracts. See [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`API.md`](API.md). |
 | **Backend Services** | ✅ Complete | All four gRPC/HTTP microservices implemented in Go — Catalog, Booking, Payment & OTP, and Health. Includes distributed locking, idempotent webhook handling, automatic hold expiry, and gateway retry logic.                                            |
 | **Frontend Build**   | ✅ Complete | Full SPA built with React Router v8, TypeScript, and Tailwind CSS v4. Six pages implemented: Landing, Sign Up, Sign In, Browse Movies, Movie Details, Seat Selection, and Payment.                                                                      |
-| **CI/CD Pipeline**   | ✅ Complete | GitHub Actions pipeline for PR checks and automated deployment.                                                                                                                                                                                         |
+| **CI/CD Pipeline**   | ✅ Complete | GitHub Actions pipeline for PR checks and automated deployment. Check [.github/workflows/README.md](.github/workflow/README.md)                                                                                                                                       |
 
 ### ❌ What We Did Not Complete
 
@@ -94,12 +94,12 @@ flowchart TD
 │              │ │              │       │  │ REST │ │ WS  │  │   │                  │   │
 │              │ │              │       │  └──────┘ └─────┘  │   │                  │   │
 └──────┬───────┘ └──────┬───────┘       └────────┬───────────┘   └────────┬─────────┘   │
-       │                │                        │                       │              │
-       │                │                 (gRPC Inter-service) ──────────┤              │
-       ▼                ▼                        ▼                       ▼              ▼
+       │                │                        │                        │             │
+       │                │                 (gRPC Inter-service) ───────────┤             │
+       ▼                ▼                        ▼                        ▼             ▼
 ┌──────────────┐ ┌──────────────┐       ┌──────────────┐          ┌──────────────┐ ┌──────────────┐
 │    Health    │ │ DB: Postgres │       │ DB: Postgres │          │  DB: Redis   │ │    Health    │
-│   Monitor   │ │ (Catalog DB) │       │ (Booking DB) │          │ (Lock/TTL)   │ │   Monitor   │
+│   Monitor    │ │ (Catalog DB) │       │ (Booking DB) │          │ (Lock/TTL)   │ │   Monitor    │
 └──────────────┘ └──────────────┘       └──────────────┘          └──────────────┘ └──────────────┘
 ```
 
@@ -171,7 +171,7 @@ Manages the payment flow with the unreliable Mock Gateway:
 
 ### Backend
 
-- **Language**: Go 1.25
+- **Language**: Go 1.26
 - **HTTP Framework**: Gin
 - **Database**: PostgreSQL 16 (via `pgx/v5` driver, `sqlc` for type-safe queries)
 - **Cache & Locks**: Redis 7 (`go-redis/v9`)
