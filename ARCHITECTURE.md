@@ -26,11 +26,11 @@ flowchart TD
         MOCKGW["Mock Gateway<br/>(Port 9000)"]
     end
 
-    UI -->|HTTP REST / JSON| NGINX
-    K6 -->|HTTP REST / JSON| NGINX
+    UI -->|HTTP REST / WS| NGINX
+    K6 -->|HTTP REST / WS| NGINX
 
     NGINX -->|HTTP| Catalog
-    NGINX -->|HTTP| Booking
+    NGINX -->|HTTP / WS| Booking
     NGINX -->|HTTP| Payment
 
     Catalog --> PGCAT
