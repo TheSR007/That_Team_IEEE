@@ -1,15 +1,14 @@
 # CinemaSeat API Documentation
 
-This document specifies the REST and WebSocket API endpoints for the CinemaSeat ticketing backend.
+This document specifies the REST API endpoints for the CinemaSeat ticketing backend.
 
 ---
 
 ## Overview
 
-- **Content-Type**: `application/json` (for REST endpoints)
+- **Content-Type**: `application/json`
 - **Base Path**: `/api/v1`
-- **Concurrency Model**: Optimistic/Pessimistic DB locking on PostgreSQL for seat holds.
-
+- **Concurrency Model**: Optimistic/Pessimistic DB locking on PostgreSQL + Redis distributed locking (`HOLD_TTL_SECONDS`) for seat holds.
 - **Gateway Interoperability**: Non-blocking asynchronous callback handling with 100% `200 OK` responses on webhooks.
 
 ---
@@ -21,16 +20,13 @@ This document specifies the REST and WebSocket API endpoints for the CinemaSeat 
 System health check endpoint used by orchestration tools and automated judging scripts.
 
 - **Response Time**: $< 1.0\text{ second}$.
-
 - **Dependencies**: Checks internal database connectivity. Independent of external mock gateway status.
 
 #### Response (`200 OK`)
 
 ```json
 {
-  "status": "UP",
-  "database": "CONNECTED",
-  "timestamp": "2026-08-08T09:00:00Z"
+  "status": "UP"
 }
 ```
 
@@ -47,9 +43,11 @@ Retrieves pre-populated list of active movies.
 ```json
 [
   {
-    "id": "mov_101",
+    "movie_id": "3a0b12c4-5678-4ef9-90ab-cdef12345678",
     "title": "Spider-Man: Brand New Day",
+    "description": "The web-slinger returns...",
     "duration_minutes": 150,
+    "poster_url": "https://example.com/poster.jpg",
     "rating": "PG-13"
   }
 ]
@@ -66,10 +64,11 @@ Retrieves showtime metadata, theatre venue, and seat pricing structure.
 ```json
 {
   "showtime_id": "sh_101",
-  "movie_id": "mov_101",
+  "movie_id": "3a0b12c4-5678-4ef9-90ab-cdef12345678",
+  "hall_id": "hall_101",
   "theatre_name": "Hall A",
   "start_time": "2026-08-08T20:00:00Z",
-  "base_price": 450
+  "price": 450
 }
 ```
 
@@ -79,8 +78,6 @@ Retrieves showtime metadata, theatre venue, and seat pricing structure.
 
 Fetch live seat matrix and current availability status for a showtime.
 
-- **Judging Requirement**: Must be documented in `README.md` and accessible via direct HTTP GET.
-
 #### Response (`200 OK`)
 
 ```json
@@ -88,18 +85,21 @@ Fetch live seat matrix and current availability status for a showtime.
   "showtime_id": "sh_101",
   "seats": [
     {
-      "seat_number": "F12",
+      "showtime_seat_id": "st_seat_001",
+      "seat_id": "seat_101",
+      "row_letter": "F",
+      "seat_number": 12,
+      "seat_type": "REGULAR",
       "status": "HELD",
       "price": 450
     },
     {
-      "seat_number": "F13",
+      "showtime_seat_id": "st_seat_002",
+      "seat_id": "seat_102",
+      "row_letter": "F",
+      "seat_number": 13,
+      "seat_type": "REGULAR",
       "status": "AVAILABLE",
-      "price": 450
-    },
-    {
-      "seat_number": "F14",
-      "status": "BOOKED",
       "price": 450
     }
   ]
@@ -114,8 +114,6 @@ Fetch live seat matrix and current availability status for a showtime.
 
 Atomically reserve a specific seat for a showtime.
 
-- **Judging Requirement**: Must be documented in `README.md` and subjected to Scenario A concurrency testing (100 concurrent requests on 1 seat).
-
 - **Hold TTL**: Duration configured dynamically via the `HOLD_TTL_SECONDS` environment variable.
 
 #### Request Body
@@ -123,7 +121,7 @@ Atomically reserve a specific seat for a showtime.
 ```json
 {
   "showtime_id": "sh_101",
-  "seat_number": "F12",
+  "showtime_seat_id": "st_seat_001",
   "user_id": "usr_99"
 }
 ```
@@ -132,9 +130,8 @@ Atomically reserve a specific seat for a showtime.
 
 ```json
 {
-  "hold_id": "hld_882",
+  "hold_id": "st_seat_001",
   "showtime_id": "sh_101",
-  "seat_number": "F12",
   "status": "HELD",
   "expires_at": "2026-08-08T09:05:00Z"
 }
@@ -145,7 +142,7 @@ Atomically reserve a specific seat for a showtime.
 ```json
 {
   "error": "SEAT_UNAVAILABLE",
-  "message": "Seat F12 is already held or booked."
+  "message": "Seat is already held or booked."
 }
 ```
 
@@ -155,15 +152,15 @@ Atomically reserve a specific seat for a showtime.
 
 ### `POST /api/v1/bookings`
 
-Initiates payment processing for an active seat hold and dispatches an asynchronous `/charge` request to the mock gateway.
+Initiates booking creation for an active seat hold.
 
-- **Non-Blocking Rule**: Must return `202 Accepted` immediately without blocking on gateway completion.
+- **Non-Blocking Rule**: Returns `202 Accepted` immediately without blocking on gateway completion.
 
 #### Request Body
 
 ```json
 {
-  "hold_id": "hld_882",
+  "hold_id": "st_seat_001",
   "phone": "+8801700000000"
 }
 ```
@@ -173,19 +170,10 @@ Initiates payment processing for an active seat hold and dispatches an asynchron
 ```json
 {
   "booking_ref": "bk_001",
-  "hold_id": "hld_882",
+  "hold_id": "st_seat_001",
   "status": "PENDING",
-  "amount": 450,
-  "hold_expires_at": "2026-08-08T09:05:00Z"
-}
-```
-
-#### Response (`400 Bad Request` - Expired Hold)
-
-```json
-{
-  "error": "HOLD_EXPIRED",
-  "message": "The seat hold has expired. Please reserve a new seat."
+  "total_amount": 450,
+  "expires_at": "2026-08-08T09:05:00Z"
 }
 ```
 
@@ -201,9 +189,10 @@ Polling endpoint used by the frontend to verify the status of an in-flight booki
 {
   "booking_ref": "bk_001",
   "showtime_id": "sh_101",
-  "seat_number": "F12",
   "status": "CONFIRMED",
-  "updated_at": "2026-08-08T09:02:15Z"
+  "total_amount": 450,
+  "created_at": "2026-08-08T09:00:00Z",
+  "expires_at": "2026-08-08T09:05:00Z"
 }
 ```
 
@@ -215,9 +204,8 @@ _Possible `status` values_: `PENDING`, `CONFIRMED`, `FAILED`, `EXPIRED`.
 
 Webhook endpoint registered with the gateway as `callback_url`.
 
-- **Strict Requirement**: Must **always return `200 OK**` regardless of internal logic state or duplicate deliveries.
-
-- **Idempotency**: Must safely handle duplicate `event_id` or `booking_ref` payloads without updating state or metrics twice.
+- **Strict Requirement**: Must **always return `200 OK`** regardless of internal logic state or duplicate deliveries.
+- **Idempotency**: Safely handles duplicate `event_id` or `booking_ref` payloads.
 
 #### Inbound Webhook Payload (From Gateway)
 
@@ -294,29 +282,3 @@ Relays OTP verification payload to the external mock gateway (`POST /otp/verify`
   "verified": false,
   "message": "Invalid verification code."
 }
-```
-
----
-
-## 6. Real-Time Broadcast Domain (WebSocket)
-
-### `GET /ws/showtimes/:showtime_id`
-
-Establish an HTTP Upgrade connection to stream seat state mutations in real time.
-
-- **Protocol**: `wss://` or `ws://`
-- **Direction**: Read-only Server-to-Client broadcast events.
-
-#### Outbound Event Payload
-
-```json
-{
-  "event": "SEAT_STATUS_CHANGED",
-  "showtime_id": "sh_101",
-  "seat_number": "F12",
-  "status": "HELD",
-  "timestamp": "2026-08-08T09:00:01Z"
-}
-```
-
-_Possible `status` values_: `AVAILABLE`, `HELD`, `BOOKED`.

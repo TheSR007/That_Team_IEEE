@@ -38,16 +38,16 @@ func NewService(store store.Querier, logger *zap.Logger) *Service {
 }
 
 func (s *Service) HandleCallback(ctx context.Context, payload WebhookCallbackPayload) error {
-	// TODO: Idempotent processing using last_event_id in payments table
+	// TODO: Perform idempotent processing using last_event_id in payments table
 	return nil
 }
 
 func (s *Service) SendOTP(ctx context.Context, req SendOTPRequest) error {
-	// TODO: Relay OTP request to external mock gateway (/otp/send) and cache in Redis
+	// TODO: Relay OTP request to external mock gateway (/otp/send) and cache code in Redis
 	return nil
 }
 
 func (s *Service) VerifyOTP(ctx context.Context, req VerifyOTPRequest) (bool, error) {
-	// TODO: Relay OTP verification to external mock gateway (/otp/verify) or verify in Redis
+	// TODO: Verify OTP against external mock gateway (/otp/verify) or Redis
 	return true, nil
 }

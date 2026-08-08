@@ -5,7 +5,8 @@ CREATE TABLE movies (
     title VARCHAR(255) NOT NULL,
     description TEXT,
     duration_minutes INT NOT NULL,
-    poster_url VARCHAR(512)
+    poster_url VARCHAR(512),
+    rating VARCHAR(20) DEFAULT 'PG-13'
 );
 
 CREATE TABLE theatres (

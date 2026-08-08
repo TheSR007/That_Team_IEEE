@@ -8,24 +8,31 @@ import (
 )
 
 type MovieDTO struct {
-	ID              string `json:"id"`
+	MovieID         string `json:"movie_id"`
 	Title           string `json:"title"`
+	Description     string `json:"description"`
 	DurationMinutes int32  `json:"duration_minutes"`
-	Rating          string `json:"rating,omitempty"`
+	PosterURL       string `json:"poster_url"`
+	Rating          string `json:"rating"`
 }
 
 type ShowtimeDTO struct {
 	ShowtimeID  string  `json:"showtime_id"`
 	MovieID     string  `json:"movie_id"`
+	HallID      string  `json:"hall_id"`
 	TheatreName string  `json:"theatre_name"`
 	StartTime   string  `json:"start_time"`
-	BasePrice   float64 `json:"base_price"`
+	Price       float64 `json:"price"`
 }
 
 type SeatMapItemDTO struct {
-	SeatNumber string  `json:"seat_number"`
-	Status     string  `json:"status"`
-	Price      float64 `json:"price"`
+	ShowtimeSeatID string  `json:"showtime_seat_id"`
+	SeatID         string  `json:"seat_id"`
+	RowLetter      string  `json:"row_letter"`
+	SeatNumber     int32   `json:"seat_number"`
+	SeatType       string  `json:"seat_type"`
+	Status         string  `json:"status"`
+	Price          float64 `json:"price"`
 }
 
 type SeatMapDTO struct {
@@ -46,23 +53,24 @@ func NewService(store store.Querier, logger *zap.Logger) *Service {
 }
 
 func (s *Service) ListMovies(ctx context.Context) ([]MovieDTO, error) {
-	// TODO: Fetch movies via store.ListMovies(ctx)
+	// TODO: Query movies from catalog_db
 	return []MovieDTO{}, nil
 }
 
 func (s *Service) GetShowtime(ctx context.Context, showtimeID string) (*ShowtimeDTO, error) {
-	// TODO: Fetch showtime details via store.GetShowtime(ctx, id)
+	// TODO: Query showtime details joined with hall/theatre
 	return &ShowtimeDTO{
 		ShowtimeID:  showtimeID,
 		MovieID:     "mov_101",
+		HallID:      "hall_1",
 		TheatreName: "Hall A",
 		StartTime:   "2026-08-08T20:00:00Z",
-		BasePrice:   450,
+		Price:       450,
 	}, nil
 }
 
 func (s *Service) GetSeatMap(ctx context.Context, showtimeID string) (*SeatMapDTO, error) {
-	// TODO: Fetch live seat matrix from Redis cache or Booking DB
+	// TODO: Fetch live seat matrix joined with seat details
 	return &SeatMapDTO{
 		ShowtimeID: showtimeID,
 		Seats:      []SeatMapItemDTO{},
