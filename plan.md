@@ -4,13 +4,31 @@
 
 ---
 
+## Tech Stack (Confirmed)
+
+| Layer | Technology |
+|---|---|
+| Frontend | React Router v7 (App Mode / SSR), Tailwind CSS |
+| Backend | Go Microservices (Catalog, Booking, Payment, Health) |
+| Inter-service | gRPC |
+| Database | PostgreSQL 16 (Catalog DB + Booking DB — two separate instances) |
+| Cache / Locks | Redis 7 |
+| Reverse Proxy | Nginx (Port 8080 — single base URL) |
+| Gateway | `asifmahmoud414/mock-gateway:latest` (Port 9000) |
+| Containerization | Docker + Docker Compose |
+| CI/CD | GitHub Actions |
+| Deployment | AWS EC2 |
+| Load Testing | k6 |
+
+---
+
 ## Team Structure
 
 | Person | Role |
 |---|---|
-| Person A | Frontend (Next.js) + CI/CD |
-| Person B | Backend Engineer |
-| Person C | Backend Engineer |
+| Person A | Frontend (React Router v7) + CI/CD |
+| Person B | Backend — Catalog Service + Booking Service |
+| Person C | Backend — Payment Service (includes OTP) + Gateway Integration |
 
 ---
 
@@ -49,95 +67,128 @@
 ### High-Level Design
 
 ```
-                        +------------------+
-                        |   Next.js        |
-                        |   Frontend       |  (Person A)
-                        |   (Port 3000)    |
-                        +--------+---------+
-                                 |
-                        +--------v---------+
-                        |   Nginx          |
-                        |   Reverse Proxy  |  (Bonus)
-                        |   (Port 80)      |
-                        +--------+---------+
-                                 |
-                  +--------------+--------------+
-                  |                             |
-         +--------v---------+       +-----------v------+
-         |   API Gateway /  |       |   Callback       |
-         |   Core Backend   |       |   Handler        |
-         |   (Go / Node.js) |       |   (Webhook)      |
-         +--------+---------+       +-----------+------+
-                  |                             |
-          +-------+-------+                     |
-          |               |                     |
-   +------v----+   +------v----+                |
-   | PostgreSQL|   |  Redis    |<---------------+
-   | (Primary) |   | (Cache +  |
-   | Seat data |   |  Locks +  |
-   | Bookings  |   |  TTL Jobs)|
-   +-----------+   +-----------+
+[ Browser / React Router v7 App (Port 3000) ]
+           |
+           | HTTP
+           v
+  +-------------------+
+  |  Nginx Rev Proxy  |  (Port 80 — single base URL for frontend)
+  +--------+----------+
+           |
+     Routes by path prefix:
+     /api/v1/movies*    -> Catalog  Service (8081)
+     /api/v1/showtimes* -> Catalog  Service (8081)
+     /api/v1/holds*     -> Booking  Service (8082)
+     /api/v1/bookings*  -> Booking  Service (8082)
+     /api/v1/payments*  -> Payment  Service (8083)
+     /api/v1/otp*       -> Payment  Service (8083)
+     /health            -> Health   Service (8085)
+           |
+  +---+---+---+---+
+  |   |   |       |
+Cat  Bk  Payment Hlth
+8081 8082 8083   8085
+  |   |     |     |
+  |   +--gRPC inter-service--+
+  v   v     v   v
+ DB1  DB2        Redis
+ Catalog Booking  Locks/Cache/OTP
+ PG 5432 PG 5433  6379
 
-                  +---------------------+
-                  | Mock Gateway        |
-                  | (Port 9000)         |
-                  | /charge /refund     |
-                  | /otp/send /verify   |
-                  +---------------------+
+       +---------------------+
+       | Mock Gateway        |
+       | (Port 9000)         |
+       | /charge /refund     |
+       | /otp/send /verify   |
+       +---------------------+
 ```
 
-### Service Breakdown (Monolith-First Approach)
+### Microservice Breakdown
 
-We use a **single backend service** (modular monolith) to minimize inter-service overhead and reduce complexity within the hackathon timeframe. Internal packages are clearly separated.
+| Service | HTTP Port | gRPC Port | Owns |
+|---|---|---|---|
+| Catalog Service | 8081 | 50051 | movies, theatres, halls, seats, showtimes |
+| Booking Service | 8082 | 50052 | showtime_seats, bookings, booking_seats |
+| Payment Service | 8083 | 50053 | payments, callback webhook, OTP proxy |
+| Health Service | 8085 | — | /health (always 200) |
+
+### Backend File Structure
 
 ```
 backend/
-  cmd/server/        — entry point
+  nginx/nginx.conf
+  proto/
+    catalog/v1/catalog.proto
+    booking/v1/booking.proto
+    payment/v1/payment.proto
+  gen/go/                       # generated gRPC stubs
+  cmd/
+    catalog/main.go
+    booking/main.go
+    payment/main.go             # serves both /payments/* and /otp/*
+    health/main.go
   internal/
-    movies/          — browse movies, theatres, showtimes
-    seats/           — seat map, hold, release
-    bookings/        — create booking, confirm, cancel
-    payments/        — charge, callback handling, idempotency
-    otp/             — send/verify OTP
-    health/          — /health endpoint
-  pkg/
-    gateway/         — gateway client (HTTP)
-    db/              — database connection + migrations
-    cache/           — Redis client
-    middleware/       — rate limiting, logging, auth
+    config/                     # Env loader
+    db/
+      catalog_db/migration/
+      catalog_db/store/         # sqlc generated
+      booking_db/migration/
+      booking_db/store/         # sqlc generated
+    pkg/
+      redis/                    # Redis client wrapper
+      mockgateway/              # HTTP client for mock gateway
+    services/
+      catalog/
+      booking/
+      payment/                  # includes OTP handler
+  docker-compose.yml
+  sqlc.yaml
+  go.mod / go.sum
 ```
 
-> **Decision rationale:** A monolith ships faster. If we split, every cross-service call adds latency and deployment complexity. We document this as a trade-off in DECISIONS.md.
+> **Decision rationale:** Microservices allow Person B and C to work fully in parallel with no merge conflicts on shared files. Each service owns its own DB. Nginx as the single entry point keeps the frontend simple. Trade-off: gRPC stubs must be generated before cross-service calls work.
 
 ---
 
 ## Data Model
 
-### Tables (PostgreSQL)
+### PostgreSQL — Catalog DB
 
 ```sql
--- Core Catalog Entities (Pre-populated)
-movies          (movie_id, title, description, duration_minutes, poster_url)
-theatres        (theatre_id, name, location)
-halls           (hall_id, theatre_id, name)
-seats           (seat_id, hall_id, row_letter, seat_number, seat_type)
-showtimes       (showtime_id, movie_id, hall_id, start_time, price)
+movies       (movie_id UUID PK, title, description, duration_minutes, poster_url, rating)
+theatres     (theatre_id UUID PK, name, location)
+halls        (hall_id UUID PK, theatre_id FK, name)
+seats        (seat_id UUID PK, hall_id FK, row_letter, seat_number, seat_type)
+showtimes    (showtime_id UUID PK, movie_id FK, hall_id FK, start_time, price)
+```
 
--- Booking & Concurrency Entities (Dynamic State)
-showtime_seats  (showtime_seat_id, showtime_id, seat_id, status, held_by_user, held_at, expires_at)
-bookings        (booking_ref, user_phone, showtime_id, status, total_amount, created_at, expires_at)
-booking_seats   (booking_seat_id, booking_ref, showtime_seat_id)
-payments        (payment_id, booking_ref, amount, currency, status, last_event_id, created_at, updated_at)
+### PostgreSQL — Booking DB
+
+```sql
+showtime_seats  (showtime_seat_id UUID PK, showtime_id, seat_id,
+                 status ENUM('AVAILABLE','HELD','BOOKED'),
+                 held_by_user, held_at, expires_at)
+                 -- Atomic row lock: FOR UPDATE
+
+bookings        (booking_ref UUID PK, user_phone, showtime_id,
+                 status ENUM('PENDING','CONFIRMED','FAILED','EXPIRED'),
+                 total_amount, created_at, expires_at)
+
+booking_seats   (booking_seat_id UUID PK, booking_ref FK, showtime_seat_id FK)
+
+payments        (payment_id UUID PK, booking_ref FK, amount, currency, status,
+                 last_event_id VARCHAR UNIQUE,  -- idempotency key is event_id
+                 created_at, updated_at)
 ```
 
 ### Redis Keys
 
 | Key Pattern | Purpose | TTL |
 |---|---|---|
-| `hold:{showtime_id}:{seat_id}` | Distributed lock for seat hold | `HOLD_TTL_SECONDS` |
+| `hold:{showtime_id}:{showtime_seat_id}` | Distributed lock for seat hold | `HOLD_TTL_SECONDS` |
 | `otp:{ref}` | OTP verification reference | 5 min |
-| `payment:idempotency:{payment_id}` | Dedup callback | 24 hrs |
-| `seatmap:{showtime_id}` | Cached seat map | 5 sec |
+| `payment:idempotency:{event_id}` | Dedup callback by event_id | 24 hrs |
+| `seatmap:{showtime_id}` | Cached seat map (short for freshness) | 5 sec |
 
 ---
 
@@ -147,129 +198,117 @@ payments        (payment_id, booking_ref, amount, currency, status, last_event_i
 
 The core challenge: 100 users hit the same seat simultaneously.
 
-**Strategy: Redis `SET NX` (atomic lock) + PostgreSQL update**
+**Strategy: Redis `SETNX` (atomic lock) + PostgreSQL `FOR UPDATE` row lock as double guard**
 
 ```
-User requests HOLD for seat S on showtime T:
-  1. SETNX hold:{T}:{S} {user_id} EX {HOLD_TTL_SECONDS}
-     → If 0 returned: seat already held → return 409 Conflict
-     → If 1 returned: lock acquired
-  2. UPDATE seats SET status='HELD' WHERE id=S AND status='AVAILABLE'
-     → If 0 rows updated: concurrent DB state → release Redis lock → 409
-     → If 1 row updated: hold confirmed → return 200 with hold_id
+User requests HOLD for showtime_seat_id S:
+  1. SETNX hold:{showtime_id}:{S} {user_id} EX {HOLD_TTL_SECONDS}
+     → 0 returned: seat already held → 409 Conflict
+     → 1 returned: Redis lock acquired
+  2. BEGIN TRANSACTION
+     SELECT ... FROM showtime_seats WHERE showtime_seat_id=S FOR UPDATE
+     → IF status != 'AVAILABLE': ROLLBACK → release Redis lock → 409
+     → UPDATE showtime_seats SET status='HELD', held_by=user, expires_at=now+TTL
+     COMMIT
+  3. Return 201 with hold_id, expires_at
 ```
 
-This gives us **two layers of protection:**
-- Redis `SETNX` is atomic — only one request wins
-- PostgreSQL UPDATE with a WHERE guard is a second-line defense
+Two layers of protection:
+- Redis `SETNX` is atomic — one winner across 100 concurrent requests
+- PostgreSQL `FOR UPDATE` row lock — second-line safety net
 
 ### Auto-Release Expired Holds
 
 Two mechanisms for TTL expiry:
 1. **Redis TTL** — key expires automatically, clearing the distributed lock
-2. **Background job** (every 5s) — query `seat_holds WHERE expires_at < NOW() AND status='HELD'`, update seat to AVAILABLE
+2. **Background goroutine** in Booking Service (every 5s):
+   `UPDATE showtime_seats SET status='AVAILABLE' WHERE expires_at < NOW() AND status='HELD'`
 
 ### Payment Callback Idempotency
 
 ```
-On callback received:
-  1. Check Redis key: payment:idempotency:{payment_id}
-     → If exists: return 200 immediately (duplicate)
-  2. SET payment:idempotency:{payment_id} "processed" EX 86400
-  3. Process: update booking status, confirm seat
-  4. Return 200 always
+On callback received (POST /api/v1/payments/callback):
+  1. Return 200 immediately  ← gateway always expects 200, do this first
+  2. Check Redis: payment:idempotency:{event_id}
+     → exists: stop (duplicate)
+  3. SET payment:idempotency:{event_id} EX 86400
+  4. Update payments table + call Booking Service (gRPC) to confirm/fail booking
 ```
 
 ---
 
-## API Design
+## API Design — See API.md for Full Spec
 
-### Core Endpoints (Backend)
+All endpoints are under `/api/v1` base path, routed through Nginx.
+
+### Critical Endpoints (Judges Verify These)
 
 ```
-GET  /health                         → 200 always
-
-GET  /api/movies                     → list movies
-GET  /api/movies/:id/showtimes       → list showtimes for movie
-GET  /api/showtimes/:id/seats        → live seat map  ← judges verify
-POST /api/showtimes/:id/hold         → hold a seat    ← judges verify
-POST /api/bookings/:id/pay           → initiate payment (OTP + charge)
-POST /api/bookings/:id/verify-otp    → verify OTP
-POST /internal/payment-callback      → gateway webhook (always returns 200)
-POST /api/bookings/:id/cancel        → cancel + refund
-
-GET  /api/showtimes/:id/seats
-  Response:
-  {
-    "showtime_id": "...",
-    "seats": [
-      { "id": "...", "row": "F", "col": 12, "type": "standard",
-        "status": "available|held|booked" }
-    ]
-  }
-
-POST /api/showtimes/:id/hold
-  Body: { "seat_id": "...", "user_id": "..." }
-  Response 200: { "hold_id": "...", "expires_at": "..." }
-  Response 409: { "error": "seat already held" }
+GET  /health                            → 200 always (< 1s, gateway-independent)
+GET  /api/v1/showtimes/:id/seats        → live seat map
+POST /api/v1/holds                      → hold a seat (Redis SETNX + Postgres FOR UPDATE)
 ```
+
+### Full Route Map
+
+| Method | Path | Service | Notes |
+|---|---|---|---|
+| GET | /health | Health (8085) | Always 200 |
+| GET | /api/v1/movies | Catalog | List movies |
+| GET | /api/v1/movies/:id/showtimes | Catalog | Showtimes for movie |
+| GET | /api/v1/showtimes/:id | Catalog | Showtime detail |
+| GET | /api/v1/showtimes/:id/seats | Catalog | Live seat map |
+| POST | /api/v1/holds | Booking | Hold seat |
+| POST | /api/v1/bookings | Booking | Create booking |
+| GET | /api/v1/bookings/:ref | Booking | Booking status (polling) |
+| POST | /api/v1/bookings/:ref/cancel | Booking | Cancel + refund |
+| POST | /api/v1/payments/callback | Payment | Gateway webhook (always 200) |
+| POST | /api/v1/otp/send | Payment | Send OTP via gateway (merged) |
+| POST | /api/v1/otp/verify | Payment | Verify OTP (merged) |
 
 ---
 
-## Frontend Design (Next.js)
+## Frontend Status (React Router v7 — App Mode)
 
 ### Stack
-- **Framework:** Next.js 14 (App Router)
+- **Framework:** React Router v7 (App Mode, SSR-capable)
 - **Styling:** Tailwind CSS
-- **State:** React Context + SWR for real-time seat map polling
-- **UI Components:** shadcn/ui
-- **Icons:** Lucide React
+- **State:** React Context (Auth), local useState + polling for seat map
+- **Build:** Vite
 
-### Pages & Routes
+### Routes (routes.ts — confirmed)
 
-```
-/                         → Home: list of movies
-/movies/[id]              → Movie detail + showtimes
-/showtimes/[id]           → Seat map + hold flow
-/booking/[id]/pay         → Payment + OTP page
-/booking/[id]/confirm     → Booking confirmation
-```
+| Route | File | Status |
+|---|---|---|
+| `/` (index) | `routes/home.tsx` | Done — auth guard |
+| `/sign-in` | `routes/signin.tsx` | Done |
+| `/sign-up` | `routes/signup.tsx` | Done |
+| `/browse` | `routes/browse.tsx` | Done |
+| `/movie/:movie_id` | `routes/movie.tsx` | Done |
+| `/select_seat/:movie_id` | `routes/select_seat.tsx` | Done — mock data only |
+| `/payment/:movie_id/:seat_id` | `routes/payment.tsx` | Done — needs API wiring |
+| `/booking/:booking_ref/confirm` | TBD | Not yet created |
 
-### Seat Map Component
+### Components Done
 
-```
-SeatMap
-  ├── Grid of SeatButton components
-  ├── Color coding:
-  │     available  → green (clickable)
-  │     held       → yellow (not selectable)
-  │     booked     → red/gray (not selectable)
-  │     selected   → blue (user's pending choice)
-  ├── Polling: SWR with 3s refresh interval
-  └── Hold timer: countdown shown when user holds a seat
-```
+- `SeatGrid`, `SeatNavBar`, `ProgressTracker`, `MovieSummaryBanner`, `OrderSummary`, `PaymentModal`, `SeatFooter`
+- `FormInput`, `SubmitButton`, `MobileHeader`
+- Auth context (`context/AuthContext`)
 
-### Key UX Flows
+### Frontend TODO — API Wiring (Critical)
 
-**Browse → Hold Flow:**
-1. Home page lists movies with posters
-2. Click movie → see showtimes
-3. Click showtime → seat map loads
-4. Click available seat → optimistic UI marks it selected
-5. Click "Hold Seat" → POST /hold → seat turns yellow + timer starts
-6. Redirect to payment page
-
-**Payment Flow:**
-1. Enter phone number → OTP sent via gateway
-2. Enter OTP code → verify
-3. Click "Pay" → POST /pay → loading spinner
-4. Poll booking status OR use SSE for confirmation
-5. Show confirmation page with QR-like booking ref
+- [ ] Replace mock seat data with real `GET /api/v1/showtimes/:id/seats` (poll every 3s)
+- [ ] Wire `POST /api/v1/holds` on seat confirm
+- [ ] Wire `POST /api/v1/bookings` on payment page (creates booking)
+- [ ] Wire `POST /api/v1/otp/send` and `POST /api/v1/otp/verify`
+- [ ] Poll `GET /api/v1/bookings/:ref` for confirmation status
+- [ ] Create confirmation route `/booking/:booking_ref/confirm`
+- [ ] Set `VITE_API_BASE_URL` env var and use in all fetch calls
 
 ### Environment Variables (Frontend)
 
 ```env
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+VITE_API_BASE_URL=http://localhost:8080
 ```
 
 ---
@@ -284,28 +323,72 @@ services:
     build: ./frontend
     ports: ["3000:3000"]
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://backend:8080
+      - VITE_API_BASE_URL=http://localhost:8080
 
-  backend:
-    build: ./backend
+  nginx:
+    build: ./backend/nginx
     ports: ["8080:8080"]
-    environment:
-      - DATABASE_URL=postgres://...
-      - REDIS_URL=redis://redis:6379
-      - HOLD_TTL_SECONDS=120
-      - GATEWAY_URL=http://gateway:9000
-      - CALLBACK_BASE_URL=http://backend:8080
-    depends_on: [postgres, redis, gateway]
+    depends_on: [catalog, booking, payment, otp, health]
 
-  postgres:
+  catalog:
+    build:
+      context: ./backend
+      target: catalog
+    environment:
+      - DB1_URL=postgres://app:secret@catalog_db:5432/catalog
+      - REDIS_URL=redis://redis:6379
+    depends_on: [catalog_db, redis]
+
+  booking:
+    build:
+      context: ./backend
+      target: booking
+    environment:
+      - DB2_URL=postgres://app:secret@booking_db:5432/booking
+      - REDIS_URL=redis://redis:6379
+      - CATALOG_GRPC_ADDR=catalog:50051
+      - HOLD_TTL_SECONDS=120
+    depends_on: [booking_db, redis, catalog]
+
+  payment:
+    build:
+      context: ./backend
+      target: payment
+    environment:
+      - DB2_URL=postgres://app:secret@booking_db:5432/booking
+      - REDIS_URL=redis://redis:6379
+      - GATEWAY_URL=http://gateway:9000
+      - CALLBACK_BASE_URL=http://nginx:8080
+      - BOOKING_GRPC_ADDR=booking:50052
+    depends_on: [booking_db, redis, gateway, booking]
+
+  health:
+    build:
+      context: ./backend
+      target: health
+    environment:
+      - DB1_URL=postgres://app:secret@catalog_db:5432/catalog
+      - DB2_URL=postgres://app:secret@booking_db:5432/booking
+
+  catalog_db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: cinemaseat
+      POSTGRES_DB: catalog
       POSTGRES_USER: app
       POSTGRES_PASSWORD: secret
     volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./backend/migrations:/docker-entrypoint-initdb.d
+      - catalog_pgdata:/var/lib/postgresql/data
+      - ./backend/internal/db/catalog_db/migration:/docker-entrypoint-initdb.d
+
+  booking_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: booking
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: secret
+    volumes:
+      - booking_pgdata:/var/lib/postgresql/data
+      - ./backend/internal/db/booking_db/migration:/docker-entrypoint-initdb.d
 
   redis:
     image: redis:7-alpine
@@ -315,7 +398,8 @@ services:
     ports: ["9000:9000"]
 
 volumes:
-  pgdata:
+  catalog_pgdata:
+  booking_pgdata:
 ```
 
 ### GitHub Actions CI/CD Pipeline
@@ -353,10 +437,10 @@ Pipeline Diagram:
 
 ### Phase 0 — Setup (9:00 – 9:30 AM) | All 3
 
-- [ ] Create GitHub repo (public)
-- [ ] Initialize Next.js frontend with Tailwind + shadcn
-- [ ] Initialize backend (Go or Node.js) with module structure
-- [ ] Write `docker-compose.yml` skeleton
+- [x] GitHub repo (public)
+- [x] React Router v7 frontend initialized
+- [x] Backend Go module + microservice structure initialized
+- [x] docker-compose.yml skeleton
 - [ ] Pull gateway image: `docker pull asifmahmoud414/mock-gateway:latest`
 - [ ] Set up GitHub Actions CI skeleton
 
@@ -364,40 +448,57 @@ Pipeline Diagram:
 
 ### Phase 1 — Core Implementation (9:30 AM – 1:00 PM)
 
-#### Person A — Frontend
-- [ ] Home page: movie listing
-- [ ] Movie detail page: showtimes
-- [ ] Seat map page with polling
-- [ ] Hold flow (POST + timer display)
-- [ ] Payment + OTP pages
-- [ ] Confirmation page
-- [ ] Connect to backend API (use `NEXT_PUBLIC_API_BASE_URL`)
-- [ ] Dockerize Next.js
+#### Person A — Frontend API Wiring
+- [x] Sign-in / Sign-up pages
+- [x] Browse page
+- [x] Movie detail page
+- [x] Seat map page with interactive seat grid (mock data)
+- [x] Payment page (mock flow)
+- [ ] Replace mock seat data with `GET /api/v1/showtimes/:id/seats` polling (3s interval)
+- [ ] Wire `POST /api/v1/holds` on seat confirm
+- [ ] Wire `POST /api/v1/bookings` on payment page
+- [ ] Wire `POST /api/v1/otp/send` + `POST /api/v1/otp/verify`
+- [ ] Poll `GET /api/v1/bookings/:ref` for status (every 2s)
+- [ ] Create confirmation page route `/booking/:booking_ref/confirm`
+- [ ] Dockerize React Router v7 app
 
-#### Person B — Backend Core
-- [ ] DB schema + seed data (movies, theatres, showtimes, seats)
-- [ ] `/health` endpoint
-- [ ] `GET /api/movies` + `GET /api/movies/:id/showtimes`
-- [ ] `GET /api/showtimes/:id/seats` (seat map)
-- [ ] `POST /api/showtimes/:id/hold` with Redis SETNX lock
-- [ ] Background job: expire holds after TTL
+#### Person B — Catalog + Booking Services
+- [ ] Catalog DB migrations + seed data (movies, theatres, halls, seats, showtimes)
+- [ ] Catalog Service HTTP + gRPC:
+  - `GET /api/v1/movies`
+  - `GET /api/v1/movies/:id/showtimes`
+  - `GET /api/v1/showtimes/:id`
+  - `GET /api/v1/showtimes/:id/seats`
+- [ ] Booking DB migrations
+- [ ] Booking Service HTTP + gRPC:
+  - `POST /api/v1/holds` (Redis SETNX + Postgres FOR UPDATE)
+  - `POST /api/v1/bookings`
+  - `GET /api/v1/bookings/:ref`
+  - `POST /api/v1/bookings/:ref/cancel`
+- [ ] Background goroutine: expire holds every 5s
+- [ ] Health Service: `GET /health` (always 200, no gateway dependency)
+- [ ] Nginx config routing path prefixes to each service
 
-#### Person C — Backend Payments + Gateway
-- [ ] Gateway client wrapper
-- [ ] `POST /api/bookings/:id/pay` → trigger OTP + charge (async, 202)
-- [ ] `POST /internal/payment-callback` — idempotent, always 200
-- [ ] OTP send + verify endpoints
-- [ ] Booking status + confirmation logic
-- [ ] Unit tests: concurrency hold test + duplicate callback test
+#### Person C — Payment Service (includes OTP)
+- [ ] Gateway HTTP client (`internal/pkg/mockgateway/`)
+- [ ] Payment Service (single binary, port 8083):
+  - `POST /api/v1/payments/callback` — idempotent by event_id, always 200
+  - `POST /api/v1/otp/send` — proxy to gateway `/otp/send`
+  - `POST /api/v1/otp/verify` — proxy to gateway `/otp/verify`
+  - gRPC call to Booking on SUCCEEDED → confirm booking
+  - gRPC call to Booking on FAILED → mark failed
+- [ ] Unit tests:
+  - 100 goroutines → same seat → exactly 1 HELD, 99 rejected
+  - Same event_id delivered twice → idempotent, booking confirmed once
 
 ---
 
 ### Phase 2 — Integration + Testing (1:00 – 2:30 PM)
 
-- [ ] Person A: Connect all frontend pages to real backend
-- [ ] Person B + C: Full booking path E2E test in Docker
-- [ ] Run Scenario A: 100 concurrent holds on one seat
-- [ ] Run Scenario B: Abandoned hold expiry
+- [ ] Person A: Replace all mock data with real API calls
+- [ ] Person B + C: Full booking path E2E in `docker compose up`
+- [ ] Run Scenario A: 100 concurrent holds on one seat (k6 script)
+- [ ] Run Scenario B: Abandoned hold with short `HOLD_TTL_SECONDS=10`
 - [ ] Fix any race conditions found
 
 ---
@@ -495,13 +596,14 @@ These are the 3 decisions to document:
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js 14 (App Router), Tailwind CSS, shadcn/ui, SWR |
-| Backend | Go (preferred) or Node.js + Express/Fastify |
-| Database | PostgreSQL 16 |
+| Frontend | React Router v7 (App Mode), Tailwind CSS |
+| Backend | Go Microservices (Catalog, Booking, Payment+OTP, Health) |
+| Inter-service | gRPC |
+| Database | PostgreSQL 16 (Catalog DB + Booking DB) |
 | Cache / Locks | Redis 7 |
 | Gateway | `asifmahmoud414/mock-gateway:latest` |
 | Containerization | Docker + Docker Compose |
 | CI/CD | GitHub Actions |
-| Deployment | Poridhi VM (or AWS bonus) |
-| Reverse Proxy | Nginx (bonus) |
+| Deployment | Poridhi VM |
+| Reverse Proxy | Nginx (single entry point at :8080) |
 | Load Testing | k6 |
