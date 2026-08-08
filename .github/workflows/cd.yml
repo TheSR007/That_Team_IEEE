@@ -1,0 +1,318 @@
+name: CinemaSeat CD Pipeline
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    types: [closed]
+    branches: [master, main]
+
+permissions:
+  contents: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # Stage 1: Path Filtering — detect which microservices changed
+  # ─────────────────────────────────────────────────────────────
+  filter:
+    name: Detect Changed Services
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true)
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.changes.outputs.frontend }}
+      catalog: ${{ steps.changes.outputs.catalog }}
+      booking: ${{ steps.changes.outputs.booking }}
+      payment: ${{ steps.changes.outputs.payment }}
+      health: ${{ steps.changes.outputs.health }}
+      nginx: ${{ steps.changes.outputs.nginx }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Service File Changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            catalog:
+              - 'backend/catalog/**'
+              - 'backend/pkg/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            booking:
+              - 'backend/booking/**'
+              - 'backend/pkg/**'
+              - 'backend/gen/**'
+              - 'backend/proto/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            payment:
+              - 'backend/payment/**'
+              - 'backend/booking/**'
+              - 'backend/pkg/**'
+              - 'backend/gen/**'
+              - 'backend/proto/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            health:
+              - 'backend/health-service/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            nginx:
+              - 'backend/nginx/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+
+  # ─────────────────────────────────────────────────────────────
+  # Stage 2a: Frontend CD (React Router)
+  # ─────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend CD
+    needs: filter
+    if: needs.filter.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Short SHA
+        id: vars
+        run: echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install & Lint Frontend
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile
+          pnpm lint
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build & Push Frontend Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:frontend-${{ steps.vars.outputs.short_sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:frontend-latest
+          cache-from: type=gha
+
+  # ─────────────────────────────────────────────────────────────
+  # Stage 2b: Backend Microservices CD (Catalog, Booking, Payment, Health, Nginx)
+  # ─────────────────────────────────────────────────────────────
+  backend:
+    name: Backend Microservices CD
+    needs: filter
+    if: |
+      needs.filter.outputs.catalog == 'true' ||
+      needs.filter.outputs.booking == 'true' ||
+      needs.filter.outputs.payment == 'true' ||
+      needs.filter.outputs.health == 'true' ||
+      needs.filter.outputs.nginx == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Short SHA
+        id: vars
+        run: echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Run Tests across Modules
+        run: |
+          cd backend
+          for dir in catalog booking payment health-service pkg gen; do
+            if [ -f "$dir/go.mod" ]; then
+              (cd "$dir" && go vet ./... && go test -v -race ./...)
+            fi
+          done
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push Catalog Image
+        if: needs.filter.outputs.catalog == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/catalog/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:catalog-${{ steps.vars.outputs.short_sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:catalog-latest
+          cache-from: type=gha
+
+      - name: Push Booking Image
+        if: needs.filter.outputs.booking == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/booking/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:booking-${{ steps.vars.outputs.short_sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:booking-latest
+          cache-from: type=gha
+
+      - name: Push Payment Image
+        if: needs.filter.outputs.payment == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/payment/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:payment-${{ steps.vars.outputs.short_sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:payment-latest
+          cache-from: type=gha
+
+      - name: Push Health Image
+        if: needs.filter.outputs.health == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/health-service/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:health-${{ steps.vars.outputs.short_sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:health-latest
+          cache-from: type=gha
+
+      - name: Push Nginx Image
+        if: needs.filter.outputs.nginx == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend/nginx
+          file: ./backend/nginx/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:nginx-${{ steps.vars.outputs.short_sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/cinemaseat:nginx-latest
+          cache-from: type=gha
+
+  # ─────────────────────────────────────────────────────────────
+  # Stage 3: Update Compose Tags + Deploy via doco-cd
+  # ─────────────────────────────────────────────────────────────
+  update-compose-and-deploy:
+    name: Update Tags & Deploy (doco-cd)
+    needs: [filter, frontend, backend]
+    if: |
+      always() &&
+      (
+        (needs.filter.outputs.frontend == 'true' && needs.frontend.result == 'success') ||
+        (needs.backend.result == 'success')
+      )
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine Checkout Token
+        id: token
+        run: |
+          if [ -n "${{ secrets.BUMP_TOKEN }}" ]; then
+            echo "token=BUMP_TOKEN" >> "$GITHUB_OUTPUT"
+          else
+            echo "token=GITHUB_TOKEN" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ steps.token.outputs.token == 'BUMP_TOKEN' && secrets.BUMP_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Update Image Tags in docker-compose.yml
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+
+          if [ "${{ needs.filter.outputs.frontend }}" = "true" ]; then
+            sed -i -E "s|(:frontend-).*|\1${SHORT_SHA}|g" docker-compose.yml
+          fi
+          if [ "${{ needs.filter.outputs.catalog }}" = "true" ]; then
+            sed -i -E "s|(:catalog-).*|\1${SHORT_SHA}|g" docker-compose.yml
+          fi
+          if [ "${{ needs.filter.outputs.booking }}" = "true" ]; then
+            sed -i -E "s|(:booking-).*|\1${SHORT_SHA}|g" docker-compose.yml
+          fi
+          if [ "${{ needs.filter.outputs.payment }}" = "true" ]; then
+            sed -i -E "s|(:payment-).*|\1${SHORT_SHA}|g" docker-compose.yml
+          fi
+          if [ "${{ needs.filter.outputs.health }}" = "true" ]; then
+            sed -i -E "s|(:health-).*|\1${SHORT_SHA}|g" docker-compose.yml
+          fi
+          if [ "${{ needs.filter.outputs.nginx }}" = "true" ]; then
+            sed -i -E "s|(:nginx-).*|\1${SHORT_SHA}|g" docker-compose.yml
+          fi
+
+      - name: Commit and Push Compose Tag Update ([skip ci])
+        run: |
+          TOKEN="${{ steps.token.outputs.token == 'BUMP_TOKEN' && secrets.BUMP_TOKEN || secrets.GITHUB_TOKEN }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docker-compose.yml
+          if ! git diff --quiet HEAD; then
+            git commit -m "ci: update docker-compose microservice image tags [skip ci]"
+            git remote set-url origin "https://x-access-token:${TOKEN}@github.com/${{ github.repository }}.git"
+            git push origin HEAD:${{ github.ref_name }}
+            echo "Compose tags committed and pushed."
+          else
+            echo "No tag changes to commit."
+          fi
+
+      - name: Trigger doco-cd Deployment Webhook
+        run: |
+          if [ -n "${{ secrets.DOCO_CD_SERVER_URL }}" ]; then
+            echo "Sending deployment trigger to doco-cd server..."
+            BODY='{"ref":"refs/heads/${{ github.ref_name }}","repository":{"full_name":"${{ github.repository }}"}}'
+            if [ -n "${{ secrets.WEBHOOK_SECRET }}" ]; then
+              SIG=$(echo -n "$BODY" | openssl dgst -sha256 -hmac "${{ secrets.WEBHOOK_SECRET }}" | sed 's/(stdin)= //')
+              curl -s -X POST "${{ secrets.DOCO_CD_SERVER_URL }}" \
+                -H "Content-Type: application/json" \
+                -H "X-Hub-Signature-256: sha256=${SIG}" \
+                -d "$BODY" || echo "Webhook sent."
+            else
+              curl -s -X POST "${{ secrets.DOCO_CD_SERVER_URL }}" \
+                -H "Content-Type: application/json" \
+                -d "$BODY" || echo "Webhook sent."
+            fi
+          else
+            echo "DOCO_CD_SERVER_URL secret not set. Skipping webhook trigger."
+          fi

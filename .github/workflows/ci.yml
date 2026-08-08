@@ -1,0 +1,268 @@
+name: CinemaSeat CI Pipeline
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [master, main]
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # Stage 1: Path Filtering — detect which services changed
+  # ─────────────────────────────────────────────────────────────
+  filter:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.changes.outputs.frontend }}
+      catalog: ${{ steps.changes.outputs.catalog }}
+      booking: ${{ steps.changes.outputs.booking }}
+      payment: ${{ steps.changes.outputs.payment }}
+      health: ${{ steps.changes.outputs.health }}
+      nginx: ${{ steps.changes.outputs.nginx }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check Service File Changes
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            catalog:
+              - 'backend/catalog/**'
+              - 'backend/pkg/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            booking:
+              - 'backend/booking/**'
+              - 'backend/pkg/**'
+              - 'backend/gen/**'
+              - 'backend/proto/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            payment:
+              - 'backend/payment/**'
+              - 'backend/booking/**'
+              - 'backend/pkg/**'
+              - 'backend/gen/**'
+              - 'backend/proto/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            health:
+              - 'backend/health-service/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+            nginx:
+              - 'backend/nginx/**'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/cd.yml'
+
+  # ─────────────────────────────────────────────────────────────
+  # Stage 2a: Frontend Pipeline (React Router v7)
+  # ─────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend CI
+    needs: filter
+    if: needs.filter.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Short SHA
+        id: vars
+        run: echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install Dependencies
+        run: |
+          cd frontend
+          pnpm install --frozen-lockfile
+
+      - name: Lint Frontend
+        run: |
+          cd frontend
+          pnpm lint
+
+      - name: Build TypeScript Check
+        run: |
+          cd frontend
+          pnpm build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Local Image for Security Scan
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          target: production
+          load: true
+          tags: local/frontend:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy Security Scan (CRITICAL Gate)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "local/frontend:${{ steps.vars.outputs.short_sha }}"
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL"
+
+  # ─────────────────────────────────────────────────────────────
+  # Stage 2b: Backend Microservices CI (Catalog, Booking, Payment, Health)
+  # ─────────────────────────────────────────────────────────────
+  backend:
+    name: Backend Microservices CI
+    needs: filter
+    if: |
+      needs.filter.outputs.catalog == 'true' ||
+      needs.filter.outputs.booking == 'true' ||
+      needs.filter.outputs.payment == 'true' ||
+      needs.filter.outputs.health == 'true' ||
+      needs.filter.outputs.nginx == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set Short SHA
+        id: vars
+        run: echo "short_sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+
+      - name: Run Tests across Modules
+        run: |
+          cd backend
+          for dir in catalog booking payment health-service pkg gen; do
+            if [ -f "$dir/go.mod" ]; then
+              echo "==> Testing module: $dir"
+              (cd "$dir" && go vet ./... && go test -v -race ./...)
+            fi
+          done
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Local Catalog Image
+        if: needs.filter.outputs.catalog == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/catalog/Dockerfile
+          target: production
+          load: true
+          tags: local/catalog:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Local Booking Image
+        if: needs.filter.outputs.booking == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/booking/Dockerfile
+          target: production
+          load: true
+          tags: local/booking:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Local Payment Image
+        if: needs.filter.outputs.payment == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/payment/Dockerfile
+          target: production
+          load: true
+          tags: local/payment:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Local Health Image
+        if: needs.filter.outputs.health == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/health-service/Dockerfile
+          target: production
+          load: true
+          tags: local/health:${{ steps.vars.outputs.short_sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy Scan on Microservice Images
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "local/payment:${{ steps.vars.outputs.short_sha }}"
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL"
+
+  # ─────────────────────────────────────────────────────────────
+  # Stage 3: PR Status Summary
+  # Reports overall CI status back to the pull request
+  # ─────────────────────────────────────────────────────────────
+  ci-status:
+    name: CI Status Check
+    needs: [filter, frontend, backend]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate Pipeline Results
+        run: |
+          FRONTEND_NEEDED="${{ needs.filter.outputs.frontend }}"
+          BACKEND_NEEDED="${{ needs.filter.outputs.catalog == 'true' || needs.filter.outputs.booking == 'true' || needs.filter.outputs.payment == 'true' || needs.filter.outputs.health == 'true' || needs.filter.outputs.nginx == 'true' }}"
+          FRONTEND_RESULT="${{ needs.frontend.result }}"
+          BACKEND_RESULT="${{ needs.backend.result }}"
+
+          FAILED=false
+
+          if [ "$FRONTEND_NEEDED" = "true" ] && [ "$FRONTEND_RESULT" != "success" ]; then
+            echo "Frontend CI failed or was cancelled (result: $FRONTEND_RESULT)"
+            FAILED=true
+          fi
+
+          if [ "$BACKEND_NEEDED" = "true" ] && [ "$BACKEND_RESULT" != "success" ]; then
+            echo "Backend Microservices CI failed (result: $BACKEND_RESULT)"
+            FAILED=true
+          fi
+
+          if [ "$FAILED" = "true" ]; then
+            echo "CI pipeline failed."
+            exit 1
+          fi
+
+          echo "All CI checks passed."
