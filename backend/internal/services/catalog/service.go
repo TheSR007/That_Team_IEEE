@@ -82,6 +82,37 @@ func (s *Service) ListMovies(ctx context.Context) ([]MovieDTO, error) {
 	return dtos, nil
 }
 
+func (s *Service) ListShowtimesByMovie(ctx context.Context, movieIDStr string) ([]ShowtimeDTO, error) {
+	if s.store == nil {
+		return []ShowtimeDTO{}, nil
+	}
+
+	movieUUID, err := stringToUUID(movieIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid movie_id UUID: %w", err)
+	}
+
+	showtimes, err := s.store.ListShowtimesByMovieID(ctx, movieUUID)
+	if err != nil {
+		s.logger.Error("Failed to fetch showtimes for movie", zap.String("movie_id", movieIDStr), zap.Error(err))
+		return nil, err
+	}
+
+	dtos := make([]ShowtimeDTO, 0, len(showtimes))
+	for _, st := range showtimes {
+		dtos = append(dtos, ShowtimeDTO{
+			ShowtimeID:  uuidToString(st.ShowtimeID),
+			MovieID:     uuidToString(st.MovieID),
+			HallID:      uuidToString(st.HallID),
+			TheatreName: st.TheatreName,
+			StartTime:   timestamptzToString(st.StartTime),
+			Price:       numericToFloat64(st.Price),
+		})
+	}
+
+	return dtos, nil
+}
+
 func (s *Service) GetShowtime(ctx context.Context, showtimeIDStr string) (*ShowtimeDTO, error) {
 	if s.store == nil {
 		return &ShowtimeDTO{

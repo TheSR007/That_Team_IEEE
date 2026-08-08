@@ -16,6 +16,7 @@ func NewHandler(service *Service) *Handler {
 
 func (h *Handler) RegisterRoutes(rg *gin.RouterGroup) {
 	rg.GET("/movies", h.ListMovies)
+	rg.GET("/movies/:movie_id/showtimes", h.ListShowtimesByMovie)
 	rg.GET("/showtimes/:showtime_id", h.GetShowtime)
 	rg.GET("/showtimes/:showtime_id/seats", h.GetSeatMap)
 }
@@ -27,6 +28,16 @@ func (h *Handler) ListMovies(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, movies)
+}
+
+func (h *Handler) ListShowtimesByMovie(c *gin.Context) {
+	movieID := c.Param("movie_id")
+	showtimes, err := h.service.ListShowtimesByMovie(c.Request.Context(), movieID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list showtimes"})
+		return
+	}
+	c.JSON(http.StatusOK, showtimes)
 }
 
 func (h *Handler) GetShowtime(c *gin.Context) {

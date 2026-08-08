@@ -66,7 +66,7 @@ Returns the pre-populated list of movies.
     "description": "The web-slinger returns...",
     "duration_minutes": 150,
     "poster_url": "https://example.com/poster.jpg",
-    "rating": "PG-13"
+    "rating": 6.7 
   }
 ]
 ```

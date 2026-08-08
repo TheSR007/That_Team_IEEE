@@ -126,3 +126,47 @@ func (q *Queries) ListSeatsByHallID(ctx context.Context, hallID pgtype.UUID) ([]
 	}
 	return items, nil
 }
+
+const listShowtimesByMovieID = `-- name: ListShowtimesByMovieID :many
+SELECT s.showtime_id, s.movie_id, s.hall_id, h.name AS theatre_name, s.start_time, s.price
+FROM showtimes s
+JOIN halls h ON s.hall_id = h.hall_id
+WHERE s.movie_id = $1
+ORDER BY s.start_time ASC
+`
+
+type ListShowtimesByMovieIDRow struct {
+	ShowtimeID  pgtype.UUID        `json:"showtime_id"`
+	MovieID     pgtype.UUID        `json:"movie_id"`
+	HallID      pgtype.UUID        `json:"hall_id"`
+	TheatreName string             `json:"theatre_name"`
+	StartTime   pgtype.Timestamptz `json:"start_time"`
+	Price       pgtype.Numeric     `json:"price"`
+}
+
+func (q *Queries) ListShowtimesByMovieID(ctx context.Context, movieID pgtype.UUID) ([]ListShowtimesByMovieIDRow, error) {
+	rows, err := q.db.Query(ctx, listShowtimesByMovieID, movieID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListShowtimesByMovieIDRow{}
+	for rows.Next() {
+		var i ListShowtimesByMovieIDRow
+		if err := rows.Scan(
+			&i.ShowtimeID,
+			&i.MovieID,
+			&i.HallID,
+			&i.TheatreName,
+			&i.StartTime,
+			&i.Price,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

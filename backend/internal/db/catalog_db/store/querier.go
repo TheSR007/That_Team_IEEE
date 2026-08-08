@@ -15,6 +15,7 @@ type Querier interface {
 	GetShowtime(ctx context.Context, showtimeID pgtype.UUID) (GetShowtimeRow, error)
 	ListMovies(ctx context.Context) ([]Movie, error)
 	ListSeatsByHallID(ctx context.Context, hallID pgtype.UUID) ([]Seat, error)
+	ListShowtimesByMovieID(ctx context.Context, movieID pgtype.UUID) ([]ListShowtimesByMovieIDRow, error)
 }
 
 var _ Querier = (*Queries)(nil)

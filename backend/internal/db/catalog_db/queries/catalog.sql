@@ -14,8 +14,16 @@ FROM showtimes s
 JOIN halls h ON s.hall_id = h.hall_id
 WHERE s.showtime_id = $1;
 
+-- name: ListShowtimesByMovieID :many
+SELECT s.showtime_id, s.movie_id, s.hall_id, h.name AS theatre_name, s.start_time, s.price
+FROM showtimes s
+JOIN halls h ON s.hall_id = h.hall_id
+WHERE s.movie_id = $1
+ORDER BY s.start_time ASC;
+
 -- name: ListSeatsByHallID :many
 SELECT seat_id, hall_id, row_letter, seat_number, seat_type
 FROM seats
 WHERE hall_id = $1
 ORDER BY row_letter, seat_number;
+
