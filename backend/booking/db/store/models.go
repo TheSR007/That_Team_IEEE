@@ -18,6 +18,7 @@ const (
 	BookingStatusCONFIRMED BookingStatus = "CONFIRMED"
 	BookingStatusEXPIRED   BookingStatus = "EXPIRED"
 	BookingStatusCANCELLED BookingStatus = "CANCELLED"
+	BookingStatusFAILED    BookingStatus = "FAILED"
 )
 
 func (e *BookingStatus) Scan(src interface{}) error {

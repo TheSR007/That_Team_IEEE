@@ -5,7 +5,8 @@ WORKDIR /app
 # Stage 2: Dependencies
 FROM base AS deps
 COPY health-service/go.mod health-service/go.sum* ./health-service/
-RUN mkdir -p /go/pkg && (go mod download || true)
+WORKDIR /app/health-service
+RUN go mod download
 
 # Stage 3: Development target
 FROM base AS development

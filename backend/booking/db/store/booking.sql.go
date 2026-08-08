@@ -273,3 +273,43 @@ func (q *Queries) UpdateBookingStatus(ctx context.Context, arg UpdateBookingStat
 	)
 	return i, err
 }
+
+const releaseShowtimeSeats = `-- name: ReleaseShowtimeSeats :exec
+UPDATE showtime_seats
+SET status = 'AVAILABLE',
+    held_by_user = NULL,
+    held_at = NULL,
+    expires_at = NULL
+WHERE showtime_seat_id IN (
+    SELECT showtime_seat_id FROM booking_seats WHERE booking_ref = $1
+)
+`
+
+func (q *Queries) ReleaseShowtimeSeats(ctx context.Context, bookingRef string) error {
+	_, err := q.db.Exec(ctx, releaseShowtimeSeats, bookingRef)
+	return err
+}
+
+const getPaymentByBookingRef = `-- name: GetPaymentByBookingRef :one
+SELECT payment_id, booking_ref, amount, currency, status, last_event_id, created_at, updated_at
+FROM payments
+WHERE booking_ref = $1
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetPaymentByBookingRef(ctx context.Context, bookingRef string) (Payment, error) {
+	row := q.db.QueryRow(ctx, getPaymentByBookingRef, bookingRef)
+	var i Payment
+	err := row.Scan(
+		&i.PaymentID,
+		&i.BookingRef,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.LastEventID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

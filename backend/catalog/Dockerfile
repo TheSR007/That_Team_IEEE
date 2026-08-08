@@ -6,7 +6,8 @@ WORKDIR /app
 FROM base AS deps
 COPY catalog/go.mod catalog/go.sum* ./catalog/
 COPY pkg/go.mod pkg/go.sum* ./pkg/
-RUN mkdir -p /go/pkg && (go mod download || true)
+WORKDIR /app/catalog
+RUN go mod download
 
 # Stage 3: Development target
 FROM base AS development

@@ -17,6 +17,7 @@ import (
 	"github.com/TheSR007/That_Team_IEE/backend/payment"
 	"github.com/TheSR007/That_Team_IEE/backend/pkg/config"
 	"github.com/TheSR007/That_Team_IEE/backend/pkg/mockgateway"
+	"github.com/TheSR007/That_Team_IEE/backend/payment/healthclient"
 	redispkg "github.com/TheSR007/That_Team_IEE/backend/pkg/redis"
 )
 
@@ -50,6 +51,20 @@ func main() {
 		zap.String("callback_base", callbackBaseURL),
 	)
 
+	// ── gRPC Health Server ────────────────────────────────────────────────────
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	defer healthCancel()
+
+	healthSrv := healthclient.NewServer(
+		healthclient.WithLogger(logger),
+	)
+	if err := healthSrv.Start(healthCtx); err != nil {
+		logger.Warn("Failed to start health client gRPC server", zap.Error(err))
+	} else {
+		logger.Info("Health gRPC server started", zap.String("addr", healthSrv.Addr()))
+		defer healthSrv.Stop()
+	}
+
 	// ── PostgreSQL (Booking DB) ───────────────────────────────────────────────
 	var dbStore store.Querier
 	ctx5s, cancel5s := context.WithTimeout(context.Background(), 5*time.Second)
@@ -76,9 +91,13 @@ func main() {
 	redisClient, err = redispkg.NewClient(cfg.RedisURL)
 	if err != nil {
 		logger.Warn("Could not connect to Redis — idempotency will fall back to DB only", zap.Error(err))
+		healthSrv.SetServingStatus("redis", false)
 	} else {
 		logger.Info("Connected to Redis")
+		healthSrv.SetServingStatus("redis", true)
 	}
+
+	healthSrv.SetServingStatus("payment", true)
 
 	// ── Mock Gateway Client ───────────────────────────────────────────────────
 	gwClient := mockgateway.NewClient(cfg.GatewayURL)

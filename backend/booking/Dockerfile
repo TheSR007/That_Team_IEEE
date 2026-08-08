@@ -7,7 +7,8 @@ FROM base AS deps
 COPY booking/go.mod booking/go.sum* ./booking/
 COPY pkg/go.mod pkg/go.sum* ./pkg/
 COPY gen/go.mod gen/go.sum* ./gen/
-RUN mkdir -p /go/pkg && (go mod download || true)
+WORKDIR /app/booking
+RUN go mod download
 
 # Stage 3: Development target
 FROM base AS development

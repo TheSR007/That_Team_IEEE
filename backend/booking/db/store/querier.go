@@ -14,10 +14,12 @@ type Querier interface {
 	ConfirmShowtimeSeats(ctx context.Context, bookingRef string) error
 	CreateBooking(ctx context.Context, arg CreateBookingParams) (Booking, error)
 	GetBookingByRef(ctx context.Context, bookingRef string) (Booking, error)
+	GetPaymentByBookingRef(ctx context.Context, bookingRef string) (Payment, error)
 	GetShowtimeSeatStates(ctx context.Context, showtimeID pgtype.UUID) ([]ShowtimeSeat, error)
 	HoldSeatAtomic(ctx context.Context, arg HoldSeatAtomicParams) (ShowtimeSeat, error)
 	LinkBookingSeat(ctx context.Context, arg LinkBookingSeatParams) (BookingSeat, error)
 	RecordPaymentCallback(ctx context.Context, arg RecordPaymentCallbackParams) (Payment, error)
+	ReleaseShowtimeSeats(ctx context.Context, bookingRef string) error
 	SweepExpiredHolds(ctx context.Context) ([]SweepExpiredHoldsRow, error)
 	UpdateBookingStatus(ctx context.Context, arg UpdateBookingStatusParams) (Booking, error)
 }

@@ -80,7 +80,7 @@ services:
     environment:
       PORT: 8082
       BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cinemaseat_booking}?sslmode=disable
-      REDIS_URL: redis:6379
+      REDIS_URL: redis://redis:6379
       HOLD_TTL_SECONDS: ${HOLD_TTL_SECONDS:-120}
     depends_on:
       postgres:
@@ -108,7 +108,7 @@ services:
     environment:
       PORT: 8083
       BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cinemaseat_booking}?sslmode=disable
-      REDIS_URL: redis:6379
+      REDIS_URL: redis://redis:6379
       GATEWAY_URL: http://gateway:9000
       BOOKING_GRPC_ADDR: booking:50052
       CALLBACK_BASE_URL: http://nginx:8080

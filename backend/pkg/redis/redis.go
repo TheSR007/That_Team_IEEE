@@ -49,3 +49,12 @@ func (c *Client) Get(ctx context.Context, key string) (string, error) {
 func (c *Client) Set(ctx context.Context, key string, value interface{}, ttl time.Duration) error {
 	return c.rdb.Set(ctx, key, value, ttl).Err()
 }
+
+// Exists returns true if the key exists in Redis.
+func (c *Client) Exists(ctx context.Context, key string) (bool, error) {
+	n, err := c.rdb.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
+}

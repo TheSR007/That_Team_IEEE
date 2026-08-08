@@ -12,8 +12,9 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/TheSR007/That_Team_IEE/backend/booking"
-	"github.com/TheSR007/That_Team_IEE/backend/booking/db"
+	booking_db "github.com/TheSR007/That_Team_IEE/backend/booking/db"
 	"github.com/TheSR007/That_Team_IEE/backend/booking/db/store"
+	"github.com/TheSR007/That_Team_IEE/backend/booking/healthclient"
 	"github.com/TheSR007/That_Team_IEE/backend/pkg/config"
 	"github.com/TheSR007/That_Team_IEE/backend/pkg/redis"
 )
@@ -29,6 +30,20 @@ func main() {
 	defer logger.Sync()
 
 	logger.Info("Starting Booking Microservice...")
+
+	// Initialize gRPC Health Client Server
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	defer healthCancel()
+
+	healthSrv := healthclient.NewServer(
+		healthclient.WithLogger(logger),
+	)
+	if err := healthSrv.Start(healthCtx); err != nil {
+		logger.Warn("Failed to start health client gRPC server", zap.Error(err))
+	} else {
+		logger.Info("Health gRPC server started", zap.String("addr", healthSrv.Addr()))
+		defer healthSrv.Stop()
+	}
 
 	// 1. Run DB migrations
 	if err := booking_db.RunMigrations(cfg.BookingDBURL); err != nil {
@@ -53,9 +68,11 @@ func main() {
 		pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 		if err != nil {
 			logger.Warn("Failed to connect to Booking DB, fallback to mock store", zap.Error(err))
+			healthSrv.SetServingStatus("database", false)
 		} else {
 			dbStore = store.New(pool)
 			logger.Info("Connected to Booking PostgreSQL DB Pool")
+			healthSrv.SetServingStatus("database", true)
 		}
 	}
 
@@ -63,9 +80,13 @@ func main() {
 	redisClient, err := redis.NewClient(cfg.RedisURL)
 	if err != nil {
 		logger.Warn("Failed to connect to Redis, proceeding with DB fallback", zap.Error(err))
+		healthSrv.SetServingStatus("redis", false)
 	} else {
 		logger.Info("Connected to Redis Lock Store")
+		healthSrv.SetServingStatus("redis", true)
 	}
+
+	healthSrv.SetServingStatus("booking", true)
 
 	// 4. Start gRPC Server (port 50052)
 	lis, err := net.Listen("tcp", ":50052")
