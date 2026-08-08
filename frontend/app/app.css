@@ -94,6 +94,13 @@ html, body {
   background-color: #131313;
   color: #e5e2e1;
   min-height: 100vh;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
 
 .glass-card {
@@ -138,45 +145,63 @@ html, body {
 
 /* Seat Selection Utilities */
 .seat {
-  transition: all 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 10px !important;
 }
 
+/* Available Seats: Rich Green Background & Glowing Border */
 .seat-available {
-  border: 1px solid rgba(233, 188, 182, 0.3);
-  background-color: #1c1b1b;
-  color: rgba(233, 188, 182, 0.3);
+  border: 1.5px solid #22c55e !important;
+  background-color: rgba(34, 197, 94, 0.25) !important;
+  color: #4ade80 !important;
 }
 
 .seat-available:hover {
-  border-color: #e50914;
-  color: #e50914;
-  background-color: rgba(229, 9, 20, 0.1);
+  border-color: #4ade80 !important;
+  color: #ffffff !important;
+  background-color: rgba(34, 197, 94, 0.5) !important;
+  box-shadow: 0 0 14px rgba(34, 197, 94, 0.6) !important;
+  transform: translateY(-2px);
 }
 
+/* Selected Seats: Vibrant Solid Yellow Background */
 .seat-selected {
-  background-color: #e50914;
-  color: #fff7f6;
-  border-color: #e50914;
-  box-shadow: 0 0 15px rgba(229, 9, 20, 0.4);
+  background-color: #facc15 !important;
+  color: #0f172a !important;
+  border: 1.5px solid #fef08a !important;
+  box-shadow: 0 0 16px rgba(250, 204, 21, 0.75) !important;
 }
 
+/* Occupied Seats: Distinct Solid Red Background */
 .seat-occupied {
-  background-color: #353534;
-  border-color: #353534;
-  color: rgba(53, 53, 52, 0.2);
+  background-color: #ef4444 !important;
+  border: 1.5px solid #f87171 !important;
+  color: #ffffff !important;
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.9;
 }
 
+/* On-Hold Seats: Distinct Solid Orange Background */
+.seat-on-hold {
+  background-color: #f97316 !important;
+  border: 1.5px solid #fb923c !important;
+  color: #ffffff !important;
+  cursor: not-allowed;
+  opacity: 0.95;
+}
+
+/* Premium VIP Seats: Green Background with Gold Border Accent */
 .seat-vip.seat-available {
-  border-color: #ffe16d;
-  color: #ffe16d;
-  background-color: rgba(255, 225, 109, 0.05);
+  border: 2px solid #ffe16d !important;
+  color: #4ade80 !important;
+  background-color: rgba(34, 197, 94, 0.3) !important;
+  box-shadow: 0 0 10px rgba(255, 225, 109, 0.4) !important;
 }
 
 .seat-vip.seat-available:hover {
-  background-color: rgba(255, 225, 109, 0.2);
-  box-shadow: 0 0 15px rgba(255, 225, 109, 0.3);
+  background-color: rgba(34, 197, 94, 0.55) !important;
+  box-shadow: 0 0 16px rgba(255, 225, 109, 0.7) !important;
+  transform: translateY(-2px);
 }
 
 .screen-curve {

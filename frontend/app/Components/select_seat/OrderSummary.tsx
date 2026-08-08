@@ -45,7 +45,7 @@ export function OrderSummary({
                     className={`px-2.5 py-1 rounded text-xs font-extrabold border ${
                       seat.type === "vip"
                         ? "bg-[#ffe16d]/20 text-[#ffe16d] border-[#ffe16d]/40"
-                        : "bg-[#e50914]/20 text-[#ffb4aa] border-[#e50914]/40"
+                        : "bg-[#eab308]/20 text-[#facc15] border-[#eab308]/40"
                     }`}
                   >
                     {seat.id} {seat.type === "vip" ? "(VIP)" : ""}

@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { Link } from "react-router";
+import { UserButton } from "@clerk/clerk-react";
+import { useAuth } from "../../context/AuthContext";
+
 
 interface TopHeaderProps {
   searchQuery: string;
@@ -20,6 +23,7 @@ export function TopHeader({
 }: TopHeaderProps) {
   const [showLocationMenu, setShowLocationMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const { isSignedIn } = useAuth();
 
   const locations = ["Downtown Cinema", "Mall Multiplex", "Drive-In Theatre", "Imax Grand Hall"];
   const navTabs = ["Now Playing", "Coming Soon", "Top Rated"];
@@ -38,7 +42,7 @@ export function TopHeader({
           </span>
         </button>
         <Link
-          to="/browse"
+          to="/"
           className="font-['Anybody'] text-2xl font-extrabold text-[#e50914] tracking-tighter"
         >
           CinemaSeat
@@ -129,16 +133,34 @@ export function TopHeader({
           )}
         </div>
 
-        {/* Account Link */}
-        <Link
-          to="/signup"
-          className="flex items-center gap-2 text-[#e5e2e1] hover:text-[#e50914] transition-colors p-2 rounded-lg"
-          title="Account / Sign Up"
-        >
-          <span className="material-symbols-outlined text-2xl">
-            account_circle
-          </span>
-        </Link>
+        {/* Auth Links / User Profile */}
+        <div className="flex items-center gap-2">
+          {!isSignedIn && (
+            <>
+              <Link
+                to="/sign-in"
+                className="text-[#e5e2e1] hover:text-white font-medium text-xs uppercase tracking-wider px-3 py-2 transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link
+                to="/sign-up"
+                className="bg-[#e50914] hover:bg-[#b80710] text-white font-bold text-xs uppercase tracking-wider px-4 py-2 rounded-lg transition-colors shadow-md shadow-[#e50914]/20"
+              >
+                Sign Up
+              </Link>
+            </>
+          )}
+          {isSignedIn && (
+            <UserButton
+              appearance={{
+                elements: {
+                  avatarBox: "w-8 h-8 border border-white/20",
+                },
+              }}
+            />
+          )}
+        </div>
       </div>
 
       {/* Mobile Drawer Menu */}
@@ -175,13 +197,32 @@ export function TopHeader({
               </button>
             ))}
 
-            <Link
-              to="/signup"
-              className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[#e9bcb6] hover:bg-[#201f1f]"
-            >
-              <span className="material-symbols-outlined text-lg">person_add</span>
-              <span>Sign Up / Register</span>
-            </Link>
+            {!isSignedIn && (
+              <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
+                <Link
+                  to="/sign-in"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-[#e5e2e1] hover:bg-[#201f1f]"
+                >
+                  <span className="material-symbols-outlined text-lg">login</span>
+                  <span>Sign In</span>
+                </Link>
+                <Link
+                  to="/sign-up"
+                  onClick={() => setShowMobileMenu(false)}
+                  className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm bg-[#e50914] text-white font-bold"
+                >
+                  <span className="material-symbols-outlined text-lg">person_add</span>
+                  <span>Sign Up / Register</span>
+                </Link>
+              </div>
+            )}
+            {isSignedIn && (
+              <div className="pt-2 border-t border-white/10 flex items-center justify-between px-3">
+                <span className="text-xs text-[#e9bcb6]">Signed In</span>
+                <UserButton />
+              </div>
+            )}
           </div>
         </div>
       )}

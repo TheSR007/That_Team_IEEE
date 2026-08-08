@@ -5,7 +5,7 @@ export interface Seat {
   row: string;
   number: number;
   type: "standard" | "vip";
-  status: "available" | "occupied" | "selected";
+  status: "available" | "occupied" | "selected" | "on-hold";
   price: number;
   spacerBefore?: boolean;
 }
@@ -66,8 +66,8 @@ export const defaultSeatData: SelectSeatMovieData = {
       seats: [
         { id: "B1", row: "B", number: 1, type: "standard", status: "available", price: 12 },
         { id: "B2", row: "B", number: 2, type: "standard", status: "available", price: 12 },
-        { id: "B3", row: "B", number: 3, type: "standard", status: "occupied", price: 12, spacerBefore: true },
-        { id: "B4", row: "B", number: 4, type: "standard", status: "occupied", price: 12 },
+        { id: "B3", row: "B", number: 3, type: "standard", status: "on-hold", price: 12, spacerBefore: true },
+        { id: "B4", row: "B", number: 4, type: "standard", status: "on-hold", price: 12 },
         { id: "B5", row: "B", number: 5, type: "standard", status: "available", price: 12 },
         { id: "B6", row: "B", number: 6, type: "standard", status: "available", price: 12 },
         { id: "B7", row: "B", number: 7, type: "standard", status: "available", price: 12, spacerBefore: true },
@@ -97,7 +97,7 @@ export const defaultSeatData: SelectSeatMovieData = {
         { id: "D2", row: "D", number: 2, type: "vip", status: "available", price: 18 },
         { id: "D3", row: "D", number: 3, type: "vip", status: "available", price: 18, spacerBefore: true },
         { id: "D4", row: "D", number: 4, type: "vip", status: "occupied", price: 18 },
-        { id: "D5", row: "D", number: 5, type: "vip", status: "occupied", price: 18 },
+        { id: "D5", row: "D", number: 5, type: "vip", status: "on-hold", price: 18 },
         { id: "D6", row: "D", number: 6, type: "vip", status: "available", price: 18, spacerBefore: true },
         { id: "D7", row: "D", number: 7, type: "vip", status: "available", price: 18 },
       ],

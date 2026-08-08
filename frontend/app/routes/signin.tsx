@@ -1,9 +1,8 @@
+import { Navigate } from "react-router";
 import type { Route } from "./+types/signin";
-import { AuthTopNav } from "../Components/signin/AuthTopNav";
-import { CinematicBanner } from "../Components/signin/CinematicBanner";
-import { SignInHeader } from "../Components/signin/SignInHeader";
-import { SignInForm } from "../Components/signin/SignInForm";
-import { CinemaFooter } from "../Components/signin/CinemaFooter";
+import { SignIn as ClerkSignIn } from "@clerk/clerk-react";
+import { useAuth } from "../context/AuthContext";
+import { Link } from "react-router";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -17,31 +16,85 @@ export function meta({}: Route.MetaArgs) {
 }
 
 export default function SignIn() {
+  const { isSignedIn, isLoaded } = useAuth();
+
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-[#131313] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#e50914] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (isSignedIn) {
+    return <Navigate to="/" replace />;
+  }
+
   return (
-    <div className="bg-[#131313] text-[#e5e2e1] min-h-screen flex flex-col font-['Chivo'] antialiased selection:bg-[#e50914] selection:text-white">
-      {/* Top Navbar */}
-      <AuthTopNav />
+    <div className="relative min-h-screen flex flex-col font-['Chivo'] antialiased overflow-hidden">
+      {/* Full-bleed background image from public folder */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        style={{ backgroundImage: `url('/cinema-signin-bg.jpg')` }}
+      />
 
-      {/* Main Split Content */}
-      <main className="flex-grow flex w-full">
-        {/* Left Side: Cinematic Banner */}
-        <CinematicBanner />
+      {/* Dark overlay — adapts to system light/dark preference */}
+      <div className="absolute inset-0 bg-black/60 dark:bg-black/70" />
 
-        {/* Right Side: Sign In Card Container */}
-        <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-16 bg-[#131313] relative overflow-hidden">
-          {/* Accent Glow Effect */}
-          <div className="absolute top-1/4 right-0 w-96 h-96 bg-[#e50914]/5 rounded-full blur-[100px] pointer-events-none" />
+      {/* Gradient fade at bottom */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
 
-          {/* Glass Card */}
-          <div className="glass-card w-full max-w-2xl rounded-xl p-6 md:p-8 relative z-10 flex flex-col gap-6">
-            <SignInHeader />
-            <SignInForm />
-          </div>
+      {/* Minimal top navbar — brand only */}
+      <header className="relative z-20 flex items-center px-6 lg:px-16 py-5">
+        <Link
+          to="/"
+          className="font-['Anybody'] text-2xl font-extrabold text-[#e50914] tracking-tighter drop-shadow-lg"
+        >
+          CinemaSeat
+        </Link>
+      </header>
+
+      {/* Centered auth form */}
+      <main
+        className="flex-grow relative z-10"
+        style={{ display: "grid", placeItems: "center", padding: "1rem" }}
+      >
+        <div style={{ width: "min(448px, 100%)" }}>
+          <ClerkSignIn
+            routing="path"
+            path="/sign-in"
+            signUpUrl="/sign-up"
+            appearance={{
+              variables: {
+                colorBackground: "#ffffff",
+                colorText: "#111111",
+                colorPrimary: "#e50914",
+                colorInputBackground: "#f8f8f8",
+                colorInputText: "#111111",
+                borderRadius: "0.75rem",
+              },
+              elements: {
+                card: "bg-white shadow-2xl rounded-2xl p-6 w-full",
+                headerTitle: "text-gray-900 text-2xl font-bold font-['Anybody']",
+                headerSubtitle: "text-gray-500 text-sm",
+                socialButtonsBlockButton:
+                  "bg-gray-50 border border-gray-200 text-gray-800 hover:bg-gray-100 transition-all",
+                formButtonPrimary:
+                  "bg-[#e50914] hover:bg-[#b80710] text-white font-bold transition-all shadow-lg shadow-[#e50914]/30",
+                footerActionLink:
+                  "text-[#e50914] hover:text-[#b80710] font-bold transition-colors",
+                footerAction: "hidden",
+                formFieldLabel:
+                  "text-gray-600 text-xs font-semibold uppercase tracking-wider",
+                formFieldInput:
+                  "bg-gray-50 border border-gray-200 text-gray-900 focus:border-[#e50914] focus:ring-1 focus:ring-[#e50914]",
+                dividerLine: "bg-gray-200",
+                dividerText: "text-gray-400 text-xs",
+              },
+            }}
+          />
         </div>
       </main>
-
-      {/* Footer */}
-      <CinemaFooter />
     </div>
   );
 }

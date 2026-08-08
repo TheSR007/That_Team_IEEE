@@ -105,12 +105,12 @@ Cat  Bk  Payment Hlth
 
 ### Microservice Breakdown
 
-| Service | HTTP Port | gRPC Port | Owns |
-|---|---|---|---|
-| Catalog Service | 8081 | 50051 | movies, theatres, halls, seats, showtimes |
-| Booking Service | 8082 | 50052 | showtime_seats, bookings, booking_seats |
-| Payment Service | 8083 | 50053 | payments, callback webhook, OTP proxy |
-| Health Service | 8085 | — | /health (always 200) |
+| Service | HTTP Port | gRPC Port | Nature | Owns |
+|---|---|---|---|---|
+| Catalog Service | 8081 | 50051 | Stateless — DB read | movies, theatres, halls, seats, showtimes |
+| Booking Service | 8082 | 50052 | Stateful — Redis + PG write + WS | showtime_seats, bookings, booking_seats |
+| Payment Service | 8083 | 50053 | Stateful — gateway + OTP | payments, callback webhook, OTP proxy |
+| Health Service | 8085 | — | Aggregates all | probes catalog DB, booking DB, Redis, gateway |
 
 ### Backend File Structure
 
@@ -146,7 +146,10 @@ backend/
   go.mod / go.sum
 ```
 
-> **Decision rationale:** Microservices allow Person B and C to work fully in parallel with no merge conflicts on shared files. Each service owns its own DB. Nginx as the single entry point keeps the frontend simple. Trade-off: gRPC stubs must be generated before cross-service calls work.
+> **Catalog** is stateless — reads only from Catalog DB, no Redis writes.
+> **Booking** owns the WebSocket hub for real-time seat map pushes.
+> **Payment** handles both `/payments/*` and `/otp/*` — single binary on port 8083.
+> **Health** probes catalog DB, booking DB, Redis, and gateway, then aggregates into one `/health` response. Returns 200 even if gateway is degraded.
 
 ---
 
@@ -239,13 +242,14 @@ On callback received (POST /api/v1/payments/callback):
 
 ## API Design — See API.md for Full Spec
 
-All endpoints are under `/api/v1` base path, routed through Nginx.
+All endpoints under `/api/v1`, WebSocket under `/ws`, routed through Nginx.
 
 ### Critical Endpoints (Judges Verify These)
 
 ```
-GET  /health                            → 200 always (< 1s, gateway-independent)
-GET  /api/v1/showtimes/:id/seats        → live seat map
+GET  /health                            → 200 always (< 1s) — probes all services + gateway
+GET  /api/v1/showtimes/:id/seats        → REST seat map (Redis-cached, 5s TTL)
+WS   /ws/showtimes/:id                  → real-time seat map push
 POST /api/v1/holds                      → hold a seat (Redis SETNX + Postgres FOR UPDATE)
 ```
 
@@ -253,18 +257,34 @@ POST /api/v1/holds                      → hold a seat (Redis SETNX + Postgres 
 
 | Method | Path | Service | Notes |
 |---|---|---|---|
-| GET | /health | Health (8085) | Always 200 |
-| GET | /api/v1/movies | Catalog | List movies |
-| GET | /api/v1/movies/:id/showtimes | Catalog | Showtimes for movie |
-| GET | /api/v1/showtimes/:id | Catalog | Showtime detail |
-| GET | /api/v1/showtimes/:id/seats | Catalog | Live seat map |
-| POST | /api/v1/holds | Booking | Hold seat |
-| POST | /api/v1/bookings | Booking | Create booking |
-| GET | /api/v1/bookings/:ref | Booking | Booking status (polling) |
-| POST | /api/v1/bookings/:ref/cancel | Booking | Cancel + refund |
-| POST | /api/v1/payments/callback | Payment | Gateway webhook (always 200) |
-| POST | /api/v1/otp/send | Payment | Send OTP via gateway (merged) |
-| POST | /api/v1/otp/verify | Payment | Verify OTP (merged) |
+| GET | /health | Health (8085) | Probes all services + gateway, always 200 |
+| GET | /api/v1/movies | Catalog | Stateless DB read |
+| GET | /api/v1/movies/:id/showtimes | Catalog | Stateless DB read |
+| GET | /api/v1/showtimes/:id | Catalog | Stateless DB read |
+| GET | /api/v1/showtimes/:id/seats | Catalog | Redis-cached seat map |
+| WS | /ws/showtimes/:id | Booking | Live seat map push; pushes on every status change |
+| POST | /api/v1/holds | Booking | Redis SETNX + PG FOR UPDATE; WS pushes HELD |
+| POST | /api/v1/bookings | Booking | Creates booking; gRPC to Payment to init OTP+charge flow |
+| GET | /api/v1/bookings/:ref | Booking | Frontend polls every 2s until CONFIRMED/FAILED/EXPIRED |
+| POST | /api/v1/bookings/:ref/cancel | Booking | gRPC to Payment to refund |
+| POST | /api/v1/payments/callback | Payment | Gateway webhook — always 200, idempotent by event_id |
+| POST | /api/v1/otp/send | Payment | Proxies to gateway; retries up to 3x on failure |
+| POST | /api/v1/otp/verify | Payment | Proxies to gateway; on success triggers POST /charge |
+
+### End-to-End Flow
+
+```
+[1] Browser opens WS /ws/showtimes/:id  → Booking pushes full seat map
+[2] POST /holds                         → Redis SETNX + PG FOR UPDATE → WS pushes seat=HELD
+[3] POST /bookings                      → Booking gRPC → Payment initiates OTP
+[4] POST /otp/send                      → Payment → gateway /otp/send (retry on failure)
+[5] POST /otp/verify                    → Payment → gateway /otp/verify
+                                           on success: Payment → gateway POST /charge
+[6] Gateway callback (async 2-15s)      → POST /payments/callback (idempotent by event_id)
+                                           Payment gRPC → Booking confirms seat=BOOKED
+                                           Booking WS pushes seat=BOOKED to all clients
+[7] GET /bookings/:ref (poll every 2s)  → returns CONFIRMED when callback processed
+```
 
 ---
 
@@ -464,32 +484,35 @@ Pipeline Diagram:
 
 #### Person B — Catalog + Booking Services
 - [ ] Catalog DB migrations + seed data (movies, theatres, halls, seats, showtimes)
-- [ ] Catalog Service HTTP + gRPC:
+- [ ] Catalog Service HTTP (stateless reads):
   - `GET /api/v1/movies`
   - `GET /api/v1/movies/:id/showtimes`
   - `GET /api/v1/showtimes/:id`
-  - `GET /api/v1/showtimes/:id/seats`
+  - `GET /api/v1/showtimes/:id/seats` (Redis cache, 5s TTL)
 - [ ] Booking DB migrations
-- [ ] Booking Service HTTP + gRPC:
-  - `POST /api/v1/holds` (Redis SETNX + Postgres FOR UPDATE)
-  - `POST /api/v1/bookings`
-  - `GET /api/v1/bookings/:ref`
-  - `POST /api/v1/bookings/:ref/cancel`
-- [ ] Background goroutine: expire holds every 5s
-- [ ] Health Service: `GET /health` (always 200, no gateway dependency)
+- [ ] Booking Service HTTP + WS + gRPC:
+  - `WS /ws/showtimes/:id` — WebSocket hub, pushes on every seat status change
+  - `POST /api/v1/holds` (Redis SETNX + Postgres FOR UPDATE → WS push)
+  - `POST /api/v1/bookings` — gRPC to Payment to init OTP + charge
+  - `GET /api/v1/bookings/:ref` — frontend polls this
+  - `POST /api/v1/bookings/:ref/cancel` — gRPC to Payment to refund
+- [ ] Background goroutine: expire holds every 5s → WS push seat=AVAILABLE
+- [ ] Health Service: `GET /health` probes catalog DB + booking DB + Redis + gateway
 - [ ] Nginx config routing path prefixes to each service
 
 #### Person C — Payment Service (includes OTP)
-- [ ] Gateway HTTP client (`internal/pkg/mockgateway/`)
+- [ ] Gateway HTTP client (`internal/pkg/mockgateway/`) with retry logic
 - [ ] Payment Service (single binary, port 8083):
-  - `POST /api/v1/payments/callback` — idempotent by event_id, always 200
-  - `POST /api/v1/otp/send` — proxy to gateway `/otp/send`
-  - `POST /api/v1/otp/verify` — proxy to gateway `/otp/verify`
-  - gRPC call to Booking on SUCCEEDED → confirm booking
-  - gRPC call to Booking on FAILED → mark failed
+  - `POST /api/v1/otp/send` — proxy to gateway `/otp/send`; retry up to 3x on failure
+  - `POST /api/v1/otp/verify` — proxy to gateway `/otp/verify`; on success call `POST /charge`
+  - `POST /charge` to gateway (after OTP verify) — non-blocking, pass `callback_url`
+  - `POST /api/v1/payments/callback` — idempotent by `event_id`, always 200
+    - on SUCCEEDED: gRPC to Booking → mark booking=CONFIRMED, seat=BOOKED
+    - on FAILED: gRPC to Booking → mark booking=FAILED, release seat=AVAILABLE
 - [ ] Unit tests:
   - 100 goroutines → same seat → exactly 1 HELD, 99 rejected
   - Same event_id delivered twice → idempotent, booking confirmed once
+  - OTP gateway failure → retry fires, eventually succeeds or returns 503
 
 ---
 

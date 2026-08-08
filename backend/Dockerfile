@@ -7,18 +7,18 @@ FROM base AS deps
 COPY go.mod go.sum* ./
 RUN mkdir -p /go/pkg && (go mod download || true)
 
-# Stage 3: Development target (Runs go run with live reload via air or go run)
+# Stage 3: Development target (Runs go run with live reload)
 FROM base AS development
 COPY --from=deps /go/pkg /go/pkg
 COPY . .
 EXPOSE 8080
-CMD ["go", "run", "./cmd/server/main.go"]
+CMD ["go", "run", "main.go"]
 
 # Stage 4: Production Builder
 FROM base AS builder
 COPY --from=deps /go/pkg /go/pkg
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o backend ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o backend .
 
 # Stage 5: Production Runner target (Runs compiled static binary in minimal image)
 FROM alpine:3.19 AS production

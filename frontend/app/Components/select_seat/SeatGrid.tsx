@@ -47,9 +47,10 @@ export function SeatGrid({ rows, selectedSeatIds, onToggleSeat }: SeatGridProps)
               {row.seats.map((seat) => {
                 const isSelected = selectedSeatIds.includes(seat.id);
                 const isOccupied = seat.status === "occupied";
+                const isOnHold = seat.status === "on-hold";
                 const isVip = seat.type === "vip";
 
-                let seatClasses = "seat flex items-center justify-center rounded-t-lg ";
+                let seatClasses = "seat flex items-center justify-center rounded-xl ";
                 if (isVip) {
                   seatClasses += "w-10 h-10 seat-vip ";
                 } else {
@@ -58,6 +59,8 @@ export function SeatGrid({ rows, selectedSeatIds, onToggleSeat }: SeatGridProps)
 
                 if (isOccupied) {
                   seatClasses += "seat-occupied";
+                } else if (isOnHold) {
+                  seatClasses += "seat-on-hold";
                 } else if (isSelected) {
                   seatClasses += "seat-selected";
                 } else {
@@ -72,8 +75,10 @@ export function SeatGrid({ rows, selectedSeatIds, onToggleSeat }: SeatGridProps)
                   <button
                     key={seat.id}
                     type="button"
-                    title={`Seat ${seat.id} (${seat.type === "vip" ? "VIP" : "Standard"}) - $${seat.price}`}
-                    disabled={isOccupied}
+                    title={`Seat ${seat.id} (${seat.type === "vip" ? "VIP" : "Standard"}) - $${seat.price} ${
+                      isOccupied ? "[Occupied]" : isOnHold ? "[On Hold]" : isSelected ? "[Selected]" : "[Available]"
+                    }`}
+                    disabled={isOccupied || isOnHold}
                     onClick={() => onToggleSeat(seat.id)}
                     className={seatClasses}
                   >
@@ -82,7 +87,7 @@ export function SeatGrid({ rows, selectedSeatIds, onToggleSeat }: SeatGridProps)
                         isVip ? "text-[20px]" : "text-[18px]"
                       }`}
                       style={{
-                        fontVariationSettings: isSelected ? "'FILL' 1" : "'FILL' 0",
+                        fontVariationSettings: isSelected || isOccupied || isOnHold ? "'FILL' 1" : "'FILL' 0",
                       }}
                     >
                       chair

@@ -12,18 +12,16 @@ services:
     ports:
       - "${FRONTEND_PORT}:3000"
     volumes:
-      - ./frontend:/app:ro
+      - ./frontend:/app
       - /app/node_modules
-      - /app/.next
+      - /app/.react-router
+      - /app/build
     environment:
       NODE_ENV: development
       PORT: 3000
       HOSTNAME: "0.0.0.0"
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
-      WATCHPACK_POLLING: "true"
-    depends_on:
-      backend:
-        condition: service_healthy
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 10s
@@ -40,10 +38,10 @@ services:
     ports:
       - "${BACKEND_PORT}:8080"
     volumes:
-      - ./backend:/app:ro
+      - ./backend:/app
     environment:
       PORT: 8080
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}:@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_URL: redis://redis:6379
       HOLD_TTL_SECONDS: ${HOLD_TTL_SECONDS}
       GATEWAY_URL: http://gateway:9000
