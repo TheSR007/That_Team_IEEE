@@ -12,15 +12,15 @@ REST API for the CinemaSeat ticketing backend.
 
 ### Services & Routing (via Nginx on port 8080)
 
-| Path Prefix | Service | Port |
-|---|---|---|
-| `/health` | Health Service | 8085 |
-| `/api/v1/movies*` | Catalog Service | 8081 |
+| Path Prefix          | Service         | Port |
+| -------------------- | --------------- | ---- |
+| `/health`            | Health Service  | 8085 |
+| `/api/v1/movies*`    | Catalog Service | 8081 |
 | `/api/v1/showtimes*` | Catalog Service | 8081 |
-| `/api/v1/holds*` | Booking Service | 8082 |
-| `/api/v1/bookings*` | Booking Service | 8082 |
-| `/api/v1/payments*` | Payment Service | 8083 |
-| `/api/v1/otp*` | Payment Service | 8083 |
+| `/api/v1/holds*`     | Booking Service | 8082 |
+| `/api/v1/bookings*`  | Booking Service | 8082 |
+| `/api/v1/payments*`  | Payment Service | 8083 |
+| `/api/v1/otp*`       | Payment Service | 8083 |
 
 ### Critical Rules
 
@@ -113,43 +113,6 @@ Returns showtime metadata including theatre and pricing.
 
 ---
 
-### `GET /api/v1/showtimes/:showtime_id/seats`
-
-**Judge-verified endpoint.** Returns the live seat map for a showtime.
-
-- Backed by Redis cache (`seatmap:{showtime_id}`, 5s TTL) for performance under load.
-- Status reflects real-time state: `AVAILABLE`, `HELD`, or `BOOKED`.
-
-#### Response (`200 OK`)
-
-```json
-{
-  "showtime_id": "sh_101",
-  "seats": [
-    {
-      "showtime_seat_id": "st_seat_001",
-      "seat_id": "seat_101",
-      "row_letter": "F",
-      "seat_number": 12,
-      "seat_type": "REGULAR",
-      "status": "AVAILABLE",
-      "price": 450
-    },
-    {
-      "showtime_seat_id": "st_seat_002",
-      "seat_id": "seat_102",
-      "row_letter": "F",
-      "seat_number": 13,
-      "seat_type": "REGULAR",
-      "status": "HELD",
-      "price": 450
-    }
-  ]
-}
-```
-
----
-
 ## 3. Booking Domain
 
 ### `POST /api/v1/holds`
@@ -192,6 +155,43 @@ Returns showtime metadata including theatre and pricing.
 ```
 
 ---
+
+---
+
+### `GET /api/v1/bookings/:showtime_id/seats`
+
+**Judge-verified endpoint.** Returns the live seat map for a showtime.
+
+- Backed by Redis cache (`seatmap:{showtime_id}`, 5s TTL) for performance under load.
+- Status reflects real-time state: `AVAILABLE`, `HELD`, or `BOOKED`.
+
+#### Response (`200 OK`)
+
+```json
+{
+  "showtime_id": "sh_101",
+  "seats": [
+    {
+      "showtime_seat_id": "st_seat_001",
+      "seat_id": "seat_101",
+      "row_letter": "F",
+      "seat_number": 12,
+      "seat_type": "REGULAR",
+      "status": "AVAILABLE",
+      "price": 450
+    },
+    {
+      "showtime_seat_id": "st_seat_002",
+      "seat_id": "seat_102",
+      "row_letter": "F",
+      "seat_number": 13,
+      "seat_type": "REGULAR",
+      "status": "HELD",
+      "price": 450
+    }
+  ]
+}
+```
 
 ### `POST /api/v1/bookings`
 
@@ -368,13 +368,13 @@ The gateway container (`asifmahmoud414/mock-gateway:latest`) runs on port 9000. 
 
 ### Gateway Endpoints
 
-| Method | Path | Used By |
-|---|---|---|
-| `POST` | `/charge` | Payment Service — triggers async payment |
-| `POST` | `/refund` | Payment Service — on booking cancel |
-| `POST` | `/otp/send` | Payment Service — proxied from `/api/v1/otp/send` |
+| Method | Path          | Used By                                             |
+| ------ | ------------- | --------------------------------------------------- |
+| `POST` | `/charge`     | Payment Service — triggers async payment            |
+| `POST` | `/refund`     | Payment Service — on booking cancel                 |
+| `POST` | `/otp/send`   | Payment Service — proxied from `/api/v1/otp/send`   |
 | `POST` | `/otp/verify` | Payment Service — proxied from `/api/v1/otp/verify` |
-| `GET` | `/health` | (optional check) |
+| `GET`  | `/health`     | (optional check)                                    |
 
 ### Gateway Charge Request
 
@@ -389,24 +389,24 @@ The gateway container (`asifmahmoud414/mock-gateway:latest`) runs on port 9000. 
 
 ### Documented Gateway Misbehaviour
 
-| Behaviour | Rate |
-|---|---|
-| Callback delayed 2–15 seconds | Always |
-| Payment fails (`FAILED`) | 10% |
-| Same callback delivered twice | 8% |
-| `/charge` returns 500 or times out | 2% |
-| OTP delayed or never delivered | 10% |
+| Behaviour                          | Rate   |
+| ---------------------------------- | ------ |
+| Callback delayed 2–15 seconds      | Always |
+| Payment fails (`FAILED`)           | 10%    |
+| Same callback delivered twice      | 8%     |
+| `/charge` returns 500 or times out | 2%     |
+| OTP delayed or never delivered     | 10%    |
 
 ### Test Control Headers (send on `/charge`)
 
-| Header | Effect |
-|---|---|
-| `X-Mock-Mode: deterministic` | 2s delay, always succeeds, no duplicates |
-| `X-Mock-Force: fail` | Guaranteed failure |
-| `X-Mock-Force: duplicate` | Guaranteed duplicate callback |
-| `X-Mock-Force: timeout` | Guaranteed timeout on `/charge` |
-| `X-Mock-Force: race` | Callback arrives before `/charge` returns |
-| `X-Mock-Force: success` | Guaranteed clean success |
+| Header                       | Effect                                    |
+| ---------------------------- | ----------------------------------------- |
+| `X-Mock-Mode: deterministic` | 2s delay, always succeeds, no duplicates  |
+| `X-Mock-Force: fail`         | Guaranteed failure                        |
+| `X-Mock-Force: duplicate`    | Guaranteed duplicate callback             |
+| `X-Mock-Force: timeout`      | Guaranteed timeout on `/charge`           |
+| `X-Mock-Force: race`         | Callback arrives before `/charge` returns |
+| `X-Mock-Force: success`      | Guaranteed clean success                  |
 
 ---
 
@@ -414,26 +414,26 @@ The gateway container (`asifmahmoud414/mock-gateway:latest`) runs on port 9000. 
 
 ### Redis Keys
 
-| Key | Purpose | TTL |
-|---|---|---|
-| `hold:{showtime_id}:{showtime_seat_id}` | Distributed seat lock | `HOLD_TTL_SECONDS` |
-| `otp:{ref}` | OTP verification state | 5 min |
-| `payment:idempotency:{event_id}` | Callback dedup | 24 hrs |
-| `seatmap:{showtime_id}` | Seat map cache | 5 sec |
+| Key                                     | Purpose                | TTL                |
+| --------------------------------------- | ---------------------- | ------------------ |
+| `hold:{showtime_id}:{showtime_seat_id}` | Distributed seat lock  | `HOLD_TTL_SECONDS` |
+| `otp:{ref}`                             | OTP verification state | 5 min              |
+| `payment:idempotency:{event_id}`        | Callback dedup         | 24 hrs             |
+| `seatmap:{showtime_id}`                 | Seat map cache         | 5 sec              |
 
 ### Seat Status Values
 
-| Status | Meaning |
-|---|---|
-| `AVAILABLE` | Seat is open for selection |
-| `HELD` | Seat is locked by a user, pending payment |
-| `BOOKED` | Payment confirmed, seat is sold |
+| Status      | Meaning                                   |
+| ----------- | ----------------------------------------- |
+| `AVAILABLE` | Seat is open for selection                |
+| `HELD`      | Seat is locked by a user, pending payment |
+| `BOOKED`    | Payment confirmed, seat is sold           |
 
 ### Booking Status Values
 
-| Status | Meaning |
-|---|---|
-| `PENDING` | Booking created, waiting for payment callback |
-| `CONFIRMED` | Payment succeeded, booking is final |
-| `FAILED` | Payment failed |
-| `EXPIRED` | Hold TTL expired before payment completed |
+| Status      | Meaning                                       |
+| ----------- | --------------------------------------------- |
+| `PENDING`   | Booking created, waiting for payment callback |
+| `CONFIRMED` | Payment succeeded, booking is final           |
+| `FAILED`    | Payment failed                                |
+| `EXPIRED`   | Hold TTL expired before payment completed     |

@@ -2,18 +2,22 @@ package catalog
 
 import (
 	"context"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"go.uber.org/zap"
 
 	"github.com/TheSR007/That_Team_IEE/backend/internal/db/catalog_db/store"
-	"go.uber.org/zap"
 )
 
 type MovieDTO struct {
-	MovieID         string `json:"movie_id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	DurationMinutes int32  `json:"duration_minutes"`
-	PosterURL       string `json:"poster_url"`
-	Rating          string `json:"rating"`
+	MovieID         string  `json:"movie_id"`
+	Title           string  `json:"title"`
+	Description     string  `json:"description"`
+	DurationMinutes int32   `json:"duration_minutes"`
+	PosterURL       string  `json:"poster_url"`
+	Rating          float64 `json:"rating"`
 }
 
 type ShowtimeDTO struct {
@@ -53,26 +57,101 @@ func NewService(store store.Querier, logger *zap.Logger) *Service {
 }
 
 func (s *Service) ListMovies(ctx context.Context) ([]MovieDTO, error) {
-	// TODO: Query movies from catalog_db
-	return []MovieDTO{}, nil
+	if s.store == nil {
+		return []MovieDTO{}, nil
+	}
+
+	movies, err := s.store.ListMovies(ctx)
+	if err != nil {
+		s.logger.Error("Failed to query movies list", zap.Error(err))
+		return nil, err
+	}
+
+	dtos := make([]MovieDTO, 0, len(movies))
+	for _, m := range movies {
+		dtos = append(dtos, MovieDTO{
+			MovieID:         uuidToString(m.MovieID),
+			Title:           m.Title,
+			Description:     m.Description.String,
+			DurationMinutes: m.DurationMinutes,
+			PosterURL:       m.PosterUrl.String,
+			Rating:          numericToFloat64(m.Rating),
+		})
+	}
+
+	return dtos, nil
 }
 
-func (s *Service) GetShowtime(ctx context.Context, showtimeID string) (*ShowtimeDTO, error) {
-	// TODO: Query showtime details joined with hall/theatre
+func (s *Service) GetShowtime(ctx context.Context, showtimeIDStr string) (*ShowtimeDTO, error) {
+	if s.store == nil {
+		return &ShowtimeDTO{
+			ShowtimeID:  showtimeIDStr,
+			MovieID:     "mov_101",
+			HallID:      "hall_101",
+			TheatreName: "Hall A",
+			StartTime:   time.Now().Format(time.RFC3339),
+			Price:       450,
+		}, nil
+	}
+
+	showtimeUUID, err := stringToUUID(showtimeIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid showtime_id UUID: %w", err)
+	}
+
+	st, err := s.store.GetShowtime(ctx, showtimeUUID)
+	if err != nil {
+		s.logger.Error("Failed to fetch showtime", zap.String("showtime_id", showtimeIDStr), zap.Error(err))
+		return nil, err
+	}
+
 	return &ShowtimeDTO{
-		ShowtimeID:  showtimeID,
-		MovieID:     "mov_101",
-		HallID:      "hall_1",
-		TheatreName: "Hall A",
-		StartTime:   "2026-08-08T20:00:00Z",
-		Price:       450,
+		ShowtimeID:  uuidToString(st.ShowtimeID),
+		MovieID:     uuidToString(st.MovieID),
+		HallID:      uuidToString(st.HallID),
+		TheatreName: st.TheatreName,
+		StartTime:   timestamptzToString(st.StartTime),
+		Price:       numericToFloat64(st.Price),
 	}, nil
 }
 
-func (s *Service) GetSeatMap(ctx context.Context, showtimeID string) (*SeatMapDTO, error) {
-	// TODO: Fetch live seat matrix joined with seat details
+func (s *Service) GetSeatMap(ctx context.Context, showtimeIDStr string) (*SeatMapDTO, error) {
+	// Seatmap fetching will query showtime details and combine seat definitions from catalog_db
 	return &SeatMapDTO{
-		ShowtimeID: showtimeID,
+		ShowtimeID: showtimeIDStr,
 		Seats:      []SeatMapItemDTO{},
 	}, nil
+}
+
+// Helpers for pgtype conversions
+func uuidToString(u pgtype.UUID) string {
+	if !u.Valid {
+		return ""
+	}
+	src := u.Bytes
+	return fmt.Sprintf("%x-%x-%x-%x-%x", src[0:4], src[4:6], src[6:8], src[8:10], src[10:16])
+}
+
+func stringToUUID(s string) (pgtype.UUID, error) {
+	var u pgtype.UUID
+	err := u.Scan(s)
+	return u, err
+}
+
+func numericToFloat64(n pgtype.Numeric) float64 {
+	if !n.Valid || n.Int == nil {
+		return 0.0
+	}
+	f, err := n.Float64Value()
+	if err != nil || !f.Valid {
+		return 0.0
+	}
+	return f.Float64
+}
+
+func timestamptzToString(t pgtype.Timestamptz) string {
+	if !t.Valid {
+		return ""
+	}
+	return t.Time.Format(time.RFC3339)
 }

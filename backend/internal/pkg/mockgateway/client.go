@@ -125,9 +125,10 @@ func (c *Client) VerifyOTP(ctx context.Context, payload OTPVerifyPayload) (bool,
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
 		return true, nil
-	} else if resp.StatusCode == http.StatusBadRequest {
+	case http.StatusBadRequest:
 		return false, nil
 	}
 
