@@ -1,8 +1,8 @@
 import type { Route } from "./+types/signup";
-import { CinematicBanner } from "../Components/CinematicBanner";
+import { CinematicBanner } from "../Components/signup/CinematicBanner";
 import { MobileHeader } from "../Components/MobileHeader";
 import { SignUpHeader } from "../Components/SignUpHeader";
-import { SignUpForm } from "../Components/SignUpForm";
+import { SignUpForm } from "../Components/signup/SignUpForm";
 
 export function meta({}: Route.MetaArgs) {
   return [

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { FormInput } from "./FormInput";
+import { FormInput } from "../FormInput";
 import { TermsCheckbox } from "./TermsCheckbox";
-import { SubmitButton } from "./SubmitButton";
+import { SubmitButton } from "../SubmitButton";
 
 interface SignUpFormProps {
   onSuccess?: (formData: { fullName: string; email: string }) => void;
