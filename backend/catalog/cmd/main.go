@@ -15,7 +15,7 @@ import (
 	"github.com/TheSR007/That_Team_IEE/backend/catalog"
 	"github.com/TheSR007/That_Team_IEE/backend/catalog/db"
 	"github.com/TheSR007/That_Team_IEE/backend/catalog/db/store"
-	"github.com/TheSR007/That_Team_IEE/backend/pkg/config"
+	"github.com/TheSR007/That_Team_IEE/backend/catalog/config"
 )
 
 func main() {
@@ -31,7 +31,7 @@ func main() {
 	logger.Info("Starting Catalog Microservice...")
 
 	// 1. Run DB migrations
-	if err := catalog_db.RunMigrations(cfg.CatalogDBURL); err != nil {
+	if err := db.RunMigrations(cfg.CatalogDBURL); err != nil {
 		logger.Warn("Catalog DB Migration notice", zap.Error(err))
 	} else {
 		logger.Info("Catalog DB migrations executed successfully")

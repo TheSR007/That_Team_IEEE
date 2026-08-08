@@ -1,4 +1,4 @@
-package catalog_db
+package db
 
 import (
 	"embed"
