@@ -3,7 +3,6 @@ module github.com/TheSR007/That_Team_IEE/backend
 go 1.26.5
 
 require (
-	github.com/coder/websocket v1.8.15
 	github.com/gin-contrib/cors v1.7.7
 	github.com/gin-gonic/gin v1.12.0
 	github.com/golang-migrate/migrate/v4 v4.19.1
