@@ -10,7 +10,7 @@ flowchart TD
     end
 
     subgraph Proxy["Edge / Gateway Layer"]
-        NGINX["Nginx HTTP Proxy<br/>(Port 8080)"]
+        NGINX["Nginx HTTP Proxy<br/>(Port 80/443)"]
     end
 
     subgraph Services["gRPC Microservices"]
@@ -51,7 +51,7 @@ flowchart TD
                                                        │ (HTTP REST / JSON)
                                                        ▼
                                             ┌─────────────────────┐
-                                            │ Nginx Reverse Proxy │ (HTTP - Port 8080)
+                                            │ Nginx Reverse Proxy │ (HTTP - Port 80/443)
                                             └──────────┬──────────┘
                                                        │
                      ┌─────────────────────────┼─────────────────────────┐
@@ -75,14 +75,17 @@ flowchart TD
 ## Service Specifications
 
 ### 1. Reverse Proxy Layer
+
 - **Nginx HTTP Entrypoint (Port 8080)**: Receives external HTTP REST requests from frontends and judge scripts. Routes calls to specific microservices based on request path.
 
 ### 2. Microservice Layer
+
 - **Catalog Service (`Port 8081`)**: Manages movie listings, showtime details, and seat map queries. Connects to `Catalog DB`.
 - **Booking Service (`Port 8082`)**: Handles seat reservations and hold logic. Uses Redis for atomic distributed locking and `Booking DB` for bookings.
 - **Payment & OTP Service (`Port 8083`)**: Manages transaction charges, callback webhooks, and OTP verification workflows. Interacts with `Booking DB`, Redis, and the external Mock Gateway.
 
 ### 3. Data & External Layer
+
 - **PostgreSQL (Catalog DB)**: Dedicated store for movies, theatres, halls, seats, and showtimes catalog tables.
 - **PostgreSQL (Booking DB)**: Transactional store for showtime seats, bookings, and payments tables.
 - **Redis**: Fast cache for distributed locks, seatmap cache, and short-term OTP codes.
