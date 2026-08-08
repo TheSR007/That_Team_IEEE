@@ -116,16 +116,18 @@ backend/
 ### Tables (PostgreSQL)
 
 ```sql
--- Pre-populated seed data
-movies         (id, title, description, poster_url, duration_min)
-theatres       (id, name, location, total_rows, total_cols)
-showtimes      (id, movie_id, theatre_id, starts_at, price)
-seats          (id, theatre_id, row_label, col_number, seat_type)
+-- Core Catalog Entities (Pre-populated)
+movies          (movie_id, title, description, duration_minutes, poster_url)
+theatres        (theatre_id, name, location)
+halls           (hall_id, theatre_id, name)
+seats           (seat_id, hall_id, row_letter, seat_number, seat_type)
+showtimes       (showtime_id, movie_id, hall_id, start_time, price)
 
--- Dynamic booking data
-seat_holds     (id, seat_id, showtime_id, user_id, expires_at, status)
-bookings       (id, seat_id, showtime_id, user_id, booking_ref, status, created_at)
-payments       (id, payment_id, booking_ref, status, amount, created_at, idempotency_key)
+-- Booking & Concurrency Entities (Dynamic State)
+showtime_seats  (showtime_seat_id, showtime_id, seat_id, status, held_by_user, held_at, expires_at)
+bookings        (booking_ref, user_phone, showtime_id, status, total_amount, created_at, expires_at)
+booking_seats   (booking_seat_id, booking_ref, showtime_seat_id)
+payments        (payment_id, booking_ref, amount, currency, status, last_event_id, created_at, updated_at)
 ```
 
 ### Redis Keys
