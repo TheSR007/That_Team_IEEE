@@ -16,12 +16,12 @@ flowchart TD
     subgraph Services["gRPC Microservices"]
         Catalog["Catalog Service<br/>(gRPC Port 50051)"]
         Booking["Booking Service<br/>(gRPC Port 50052)"]
-        Payment["Payment Service<br/>(gRPC Port 50053)"]
-        OTP["OTP Service<br/>(gRPC Port 50054)"]
+        Payment["Payment & OTP Service<br/>(gRPC Port 50053)"]
     end
 
     subgraph Storage["Persistence & External Dependencies"]
-        PG[(PostgreSQL)]
+        PGCAT[(PostgreSQL Catalog DB)]
+        PGBOOK[(PostgreSQL Booking DB)]
         REDIS[(Redis Cache & Locks)]
         MOCKGW["Mock Gateway<br/>(Port 9000)"]
     end
@@ -29,19 +29,16 @@ flowchart TD
     UI -->|HTTP REST / JSON| NGINX
     K6 -->|HTTP REST / JSON| NGINX
 
-    NGINX -->|gRPC| Catalog
-    NGINX -->|gRPC| Booking
-    NGINX -->|gRPC| Payment
-    NGINX -->|gRPC| OTP
+    NGINX -->|HTTP| Catalog
+    NGINX -->|HTTP| Booking
+    NGINX -->|HTTP| Payment
 
-    Catalog --> PG
-    Booking --> PG
+    Catalog --> PGCAT
+    Booking --> PGBOOK
     Booking --> REDIS
-    Payment --> PG
+    Payment --> PGBOOK
     Payment --> REDIS
     Payment --> MOCKGW
-    OTP --> REDIS
-    OTP --> MOCKGW
 ```
 
 ---
@@ -54,38 +51,38 @@ flowchart TD
                                                        │ (HTTP REST / JSON)
                                                        ▼
                                             ┌─────────────────────┐
-                                            │        nginx        │ (HTTP - Port 8080)
+                                            │ Nginx Reverse Proxy │ (HTTP - Port 8080)
                                             └──────────┬──────────┘
                                                        │
-                     ┌───────────────────┬─────────────┴─────┬───────────────────┐
-                     │ (gRPC)            │ (gRPC)            │ (gRPC)            │ (gRPC)
-                     ▼                   ▼                   ▼                   ▼
-           ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
-           │ Catalog Service │ │ Booking Service │ │ Payment Service │ │   OTP Service   │
-           │  (gRPC 50051)   │ │  (gRPC 50052)   │ │  (gRPC 50053)   │ │  (gRPC 50054)   │
-           └────────┬────────┘ └────────┬────────┘ └────────┬────────┘ └────────┬────────┘
-                    │                   │                   │                   │
-                    └─────────┬─────────┴───────────┬───────┴───────────────────│
-                              ▼                     ▼                           ▼
-                       ┌──────────────┐      ┌──────────────┐            ┌──────────────┐
-                       │  PostgreSQL  │      │    Redis     │            │ Mock Gateway │
-                       └──────────────┘      └──────────────┘            └──────────────┘
+                     ┌─────────────────────────┼─────────────────────────┐
+                     │ (HTTP)                  │ (HTTP)                  │ (HTTP)
+                     ▼                         ▼                         ▼
+           ┌─────────────────┐       ┌─────────────────┐       ┌───────────────────────┐
+           │ Catalog Service │       │ Booking Service │       │ Payment & OTP Service │
+           │   (Port 8081)   │       │   (Port 8082)   │       │      (Port 8083)      │
+           └────────┬────────┘       └────────┬────────┘       └───────────┬───────────┘
+                    │                         │                            │
+                    │                  (gRPC Inter-service) ───────────────┤
+                    ▼                         ▼                            ▼
+           ┌─────────────────┐       ┌─────────────────┐           ┌─────────────────┐
+           │ DB 1: Postgres  │       │ DB 2: Postgres  │           │   DB 3: Redis   │
+           │  (Catalog DB)   │       │  (Booking DB)   │           │  (Lock/TTL DB)  │
+           └─────────────────┘       └─────────────────┘           └─────────────────┘
 ```
 
 ---
 
 ## Service Specifications
 
-### 1. Reverse Proxy / Gateway Layer
-- **Nginx HTTP Entrypoint (Port 8080)**: Receives external HTTP REST requests (JSON payloads) from frontends and judge scripts. Translates and routes calls to specific internal microservices over gRPC protocol.
+### 1. Reverse Proxy Layer
+- **Nginx HTTP Entrypoint (Port 8080)**: Receives external HTTP REST requests from frontends and judge scripts. Routes calls to specific microservices based on request path.
 
-### 2. Microservice Layer (gRPC Decoupled)
-- **Catalog Service (`gRPC 50051`)**: Manages movie listings, showtime details, and seat map queries. Connects directly to PostgreSQL.
-- **Booking Service (`gRPC 50052`)**: Handles seat reservations and hold logic. Uses Redis (`SETNX`) for atomic distributed locking and PostgreSQL for persistent booking records.
-- **Payment Service (`gRPC 50053`)**: Manages transaction charges, idempotency check via Redis, and callback webhooks. Interacts with PostgreSQL, Redis, and Mock Gateway.
-- **OTP Service (`gRPC 50054`)**: Handles OTP generation, verification, and dispatch via Mock Gateway and Redis.
+### 2. Microservice Layer
+- **Catalog Service (`Port 8081`)**: Manages movie listings, showtime details, and seat map queries. Connects to `Catalog DB`.
+- **Booking Service (`Port 8082`)**: Handles seat reservations and hold logic. Uses Redis for atomic distributed locking and `Booking DB` for bookings.
+- **Payment & OTP Service (`Port 8083`)**: Manages transaction charges, callback webhooks, and OTP verification workflows. Interacts with `Booking DB`, Redis, and the external Mock Gateway.
 
 ### 3. Data & External Layer
-- **PostgreSQL**: Primary relational storage for movies, showtimes, seats, holds, and bookings.
-- **Redis**: Fast key-value store for atomic locks (`HOLD_TTL_SECONDS`), seatmap caching, and idempotency deduplication.
-- **Mock Gateway (Port 9000)**: External gateway dependency providing payment processing (`/charge`) and OTP delivery (`/otp/send`, `/otp/verify`).
+- **PostgreSQL (Catalog DB)**: Dedicated store for movies, theatres, halls, seats, and showtimes catalog tables.
+- **PostgreSQL (Booking DB)**: Transactional store for showtime seats, bookings, and payments tables.
+- **Redis**: Fast cache for distributed locks, seatmap cache, and short-term OTP codes.

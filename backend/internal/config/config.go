@@ -10,7 +10,8 @@ import (
 type Config struct {
 	Env            string
 	Port           string
-	DatabaseURL    string
+	CatalogDBURL   string
+	BookingDBURL   string
 	RedisURL       string
 	HoldTTLSeconds int
 	GatewayURL     string
@@ -22,7 +23,8 @@ func LoadConfig() (*Config, error) {
 
 	env := getEnv("ENV", "DEVELOPMENT")
 	port := getEnv("PORT", "8080")
-	dbURL := getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/cinemaseat?sslmode=disable")
+	db1URL := getEnv("CATALOG_DB_URL", "postgres://postgres:postgres@localhost:5432/cinemaseat_catalog?sslmode=disable")
+	db2URL := getEnv("BOOKING_DB_URL", "postgres://postgres:postgres@localhost:5432/cinemaseat_booking?sslmode=disable")
 	redisURL := getEnv("REDIS_URL", "localhost:6379")
 	gatewayURL := getEnv("GATEWAY_URL", "http://localhost:9000")
 
@@ -35,7 +37,8 @@ func LoadConfig() (*Config, error) {
 	return &Config{
 		Env:            env,
 		Port:           port,
-		DatabaseURL:    dbURL,
+		CatalogDBURL:   db1URL,
+		BookingDBURL:   db2URL,
 		RedisURL:       redisURL,
 		HoldTTLSeconds: holdTTL,
 		GatewayURL:     gatewayURL,

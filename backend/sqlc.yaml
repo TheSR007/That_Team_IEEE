@@ -1,12 +1,23 @@
 version: "2"
 sql:
   - engine: "postgresql"
-    schema: "internal/db/migration"
-    queries: "internal/db/queries"
+    schema: "internal/db/catalog_db/migration"
+    queries: "internal/db/catalog_db/queries"
     gen:
       go:
         package: "store"
-        out: "internal/db/store"
+        out: "internal/db/catalog_db/store"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_interface: true
+        emit_empty_slices: true
+  - engine: "postgresql"
+    schema: "internal/db/booking_db/migration"
+    queries: "internal/db/booking_db/queries"
+    gen:
+      go:
+        package: "store"
+        out: "internal/db/booking_db/store"
         sql_package: "pgx/v5"
         emit_json_tags: true
         emit_interface: true
