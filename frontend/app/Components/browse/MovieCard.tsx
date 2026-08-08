@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router";
 import type { Movie } from "../../types/movie";
 
 interface MovieCardProps {
@@ -104,15 +105,24 @@ export function MovieCard({ movie, onBookClick }: MovieCardProps) {
           </span>
         </div>
 
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onBookClick(movie);
-          }}
-          className="w-full bg-[#e50914] text-[#fff7f6] uppercase font-bold text-xs tracking-wider py-3 px-6 rounded-lg hover:bg-[#ffb4aa] hover:text-[#690003] transition-all duration-200 shadow-lg shadow-[#e50914]/30 active:scale-95"
-        >
-          Book Now
-        </button>
+        <div className="flex gap-2 w-full">
+          <Link
+            to={`/movie/${movie.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="flex-1 bg-[#353534] text-[#e5e2e1] uppercase font-bold text-xs tracking-wider py-3 px-3 rounded-lg hover:bg-white/20 transition-all duration-200 text-center"
+          >
+            Details
+          </Link>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onBookClick(movie);
+            }}
+            className="flex-1 bg-[#e50914] text-[#fff7f6] uppercase font-bold text-xs tracking-wider py-3 px-3 rounded-lg hover:bg-[#ffb4aa] hover:text-[#690003] transition-all duration-200 shadow-lg shadow-[#e50914]/30 active:scale-95 cursor-pointer"
+          >
+            Book
+          </button>
+        </div>
       </div>
     </div>
   );

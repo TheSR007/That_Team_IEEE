@@ -55,6 +55,27 @@
   --spacing-lg: 48px;
   --spacing-xl: 80px;
   --spacing-gutter: 24px;
+  --color-secondary-fixed: #ffe16d;
+  --color-on-secondary-fixed: #221b00;
+  --color-on-secondary-fixed-variant: #544600;
+}
+
+.glow-hover {
+  transition: all 0.3s ease;
+}
+
+.glow-hover:hover {
+  box-shadow: 0 0 20px 0 rgba(229, 9, 20, 0.35);
+  transform: translateY(-1px);
+}
+
+.popcorn-glow-hover {
+  transition: all 0.3s ease;
+}
+
+.popcorn-glow-hover:hover {
+  box-shadow: 0 0 20px 0 rgba(255, 225, 109, 0.35);
+  transform: translateY(-1px);
 }
 
 .material-symbols-outlined {
@@ -114,5 +135,82 @@ html, body {
 .social-btn:hover {
   background-color: #2a2a2a;
 }
+
+/* Seat Selection Utilities */
+.seat {
+  transition: all 0.2s ease;
+}
+
+.seat-available {
+  border: 1px solid rgba(233, 188, 182, 0.3);
+  background-color: #1c1b1b;
+  color: rgba(233, 188, 182, 0.3);
+}
+
+.seat-available:hover {
+  border-color: #e50914;
+  color: #e50914;
+  background-color: rgba(229, 9, 20, 0.1);
+}
+
+.seat-selected {
+  background-color: #e50914;
+  color: #fff7f6;
+  border-color: #e50914;
+  box-shadow: 0 0 15px rgba(229, 9, 20, 0.4);
+}
+
+.seat-occupied {
+  background-color: #353534;
+  border-color: #353534;
+  color: rgba(53, 53, 52, 0.2);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.seat-vip.seat-available {
+  border-color: #ffe16d;
+  color: #ffe16d;
+  background-color: rgba(255, 225, 109, 0.05);
+}
+
+.seat-vip.seat-available:hover {
+  background-color: rgba(255, 225, 109, 0.2);
+  box-shadow: 0 0 15px rgba(255, 225, 109, 0.3);
+}
+
+.screen-curve {
+  border-top: 4px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  box-shadow: 0 -20px 40px -10px rgba(229, 9, 20, 0.1);
+}
+
+.progress-bar-fill {
+  animation: fillProgress 1s ease-out forwards;
+  width: 0%;
+}
+
+@keyframes fillProgress {
+  to {
+    width: 66%;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+
 
 

@@ -1,0 +1,334 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>CinemaSeat - Payment</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@400..800&amp;family=Chivo:wght@400..700&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "secondary-container": "#ffdb3c",
+                      "on-secondary": "#3a3000",
+                      "inverse-primary": "#c0000c",
+                      "inverse-surface": "#e5e2e1",
+                      "error": "#ffb4ab",
+                      "surface-tint": "#ffb4aa",
+                      "inverse-on-surface": "#313030",
+                      "on-primary-container": "#fff7f6",
+                      "on-secondary-fixed": "#221b00",
+                      "on-surface": "#e5e2e1",
+                      "background": "#131313",
+                      "tertiary-fixed-dim": "#c8c6c5",
+                      "surface-variant": "#353534",
+                      "on-surface-variant": "#e9bcb6",
+                      "on-secondary-container": "#725f00",
+                      "primary-fixed": "#ffdad5",
+                      "on-tertiary-fixed-variant": "#474746",
+                      "on-primary": "#690003",
+                      "primary": "#ffb4aa",
+                      "secondary-fixed-dim": "#e9c400",
+                      "surface-bright": "#3a3939",
+                      "secondary": "#fff9ef",
+                      "error-container": "#93000a",
+                      "tertiary": "#c8c6c5",
+                      "primary-container": "#e50914",
+                      "on-tertiary-fixed": "#1c1b1b",
+                      "surface-container-lowest": "#0e0e0e",
+                      "surface": "#131313",
+                      "surface-container-highest": "#353534",
+                      "surface-container-low": "#1c1b1b",
+                      "surface-dim": "#131313",
+                      "on-secondary-fixed-variant": "#544600",
+                      "tertiary-container": "#737272",
+                      "secondary-fixed": "#ffe16d",
+                      "on-error": "#690005",
+                      "on-background": "#e5e2e1",
+                      "on-primary-fixed-variant": "#930007",
+                      "tertiary-fixed": "#e5e2e1",
+                      "outline": "#af8782",
+                      "on-error-container": "#ffdad6",
+                      "on-tertiary": "#313030",
+                      "primary-fixed-dim": "#ffb4aa",
+                      "outline-variant": "#5e3f3b",
+                      "on-tertiary-container": "#fbf8f7",
+                      "surface-container-high": "#2a2a2a",
+                      "on-primary-fixed": "#410001",
+                      "surface-container": "#201f1f"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "xl": "80px",
+                      "xs": "4px",
+                      "margin-mobile": "16px",
+                      "margin-desktop": "64px",
+                      "lg": "48px",
+                      "sm": "12px",
+                      "md": "24px",
+                      "base": "8px",
+                      "gutter": "24px"
+              },
+              "fontFamily": {
+                      "headline-lg": [
+                              "Anybody"
+                      ],
+                      "headline-md": [
+                              "Anybody"
+                      ],
+                      "body-lg": [
+                              "Chivo"
+                      ],
+                      "label-sm": [
+                              "Chivo"
+                      ],
+                      "body-md": [
+                              "Chivo"
+                      ],
+                      "headline-lg-mobile": [
+                              "Anybody"
+                      ],
+                      "label-bold": [
+                              "Chivo"
+                      ],
+                      "display-lg": [
+                              "Anybody"
+                      ]
+              },
+              "fontSize": {
+                      "headline-lg": [
+                              "40px",
+                              {
+                                      "lineHeight": "48px",
+                                      "letterSpacing": "-0.01em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-md": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-sm": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "32px",
+                              {
+                                      "lineHeight": "38px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "label-bold": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "display-lg": [
+                              "64px",
+                              {
+                                      "lineHeight": "72px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "800"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style>
+        .glow-hover:hover {
+            box-shadow: 0 0 20px 0 rgba(229, 9, 20, 0.15);
+        }
+        .glow-focus:focus-within {
+            box-shadow: 0 0 20px 0 rgba(229, 9, 20, 0.15);
+        }
+        .inner-highlight {
+            box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.1);
+        }
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover, 
+        input:-webkit-autofill:focus, 
+        input:-webkit-autofill:active{
+            -webkit-box-shadow: 0 0 0 30px #050505 inset !important;
+            -webkit-text-fill-color: #e5e2e1 !important;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex flex-col selection:bg-primary-container selection:text-white">
+<!-- TopNavBar (Linear/Transactional intent implies shell suppression, but instructions say "Consistent branding using... TopNavBar", keeping a simplified version as a header) -->
+<header class="bg-surface border-b border-white/10 backdrop-blur-md shadow-md sticky top-0 z-50">
+<div class="flex justify-between items-center px-margin-mobile md:px-margin-desktop py-4 w-full">
+<div class="font-display-lg text-headline-md font-extrabold text-primary-container tracking-tighter">
+                CinemaSeat
+            </div>
+<div class="flex items-center text-on-surface-variant gap-2 text-sm opacity-70">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">lock</span>
+                Secure Checkout
+            </div>
+</div>
+</header>
+<main class="flex-grow container mx-auto px-margin-mobile md:px-margin-desktop py-xl">
+<div class="mb-lg">
+<button class="flex items-center gap-2 text-on-surface-variant hover:text-primary-container transition-colors font-label-bold text-label-bold">
+<span class="material-symbols-outlined">arrow_back</span>
+                Back to Seat Selection
+            </button>
+<h1 class="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg mt-md">Complete Payment</h1>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter">
+<!-- Payment Details Section -->
+<div class="lg:col-span-8 space-y-md">
+<!-- Payment Methods -->
+<div class="bg-surface-container-low rounded-xl p-md md:p-lg inner-highlight">
+<h2 class="font-headline-md text-headline-md mb-md">Payment Method</h2>
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-sm mb-lg">
+<label class="relative cursor-pointer">
+<input checked="" class="peer sr-only" name="payment_method" type="radio">
+<div class="flex flex-col items-center justify-center p-md rounded-lg border border-surface-variant bg-surface-container hover:bg-surface-container-high transition-all peer-checked:border-primary-container peer-checked:bg-[#2a1314] glow-hover h-full">
+<span class="material-symbols-outlined text-3xl mb-2 peer-checked:text-primary-container text-on-surface-variant" style="font-variation-settings: 'FILL' 1;">credit_card</span>
+<span class="font-label-bold text-label-bold peer-checked:text-white">Credit Card</span>
+</div>
+</label>
+<label class="relative cursor-pointer">
+<input class="peer sr-only" name="payment_method" type="radio">
+<div class="flex flex-col items-center justify-center p-md rounded-lg border border-surface-variant bg-surface-container hover:bg-surface-container-high transition-all peer-checked:border-primary-container peer-checked:bg-[#2a1314] glow-hover h-full">
+<span class="material-symbols-outlined text-3xl mb-2 peer-checked:text-primary-container text-on-surface-variant" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+<span class="font-label-bold text-label-bold peer-checked:text-white">Digital Wallet</span>
+</div>
+</label>
+<label class="relative cursor-pointer">
+<input class="peer sr-only" name="payment_method" type="radio">
+<div class="flex flex-col items-center justify-center p-md rounded-lg border border-surface-variant bg-surface-container hover:bg-surface-container-high transition-all peer-checked:border-primary-container peer-checked:bg-[#2a1314] glow-hover h-full">
+<span class="material-symbols-outlined text-3xl mb-2 peer-checked:text-primary-container text-on-surface-variant" style="font-variation-settings: 'FILL' 1;">redeem</span>
+<span class="font-label-bold text-label-bold peer-checked:text-white">Gift Card</span>
+</div>
+</label>
+</div>
+<!-- Card Form -->
+<form class="space-y-md">
+<div class="space-y-sm glow-focus rounded-lg transition-shadow">
+<label class="block font-label-sm text-label-sm text-on-surface-variant">Cardholder Name</label>
+<input class="w-full bg-[#050505] border border-surface-variant rounded-lg px-4 py-3 text-on-surface font-body-md focus:border-primary-container focus:ring-0 transition-colors uppercase" placeholder="JANE DOE" type="text">
+</div>
+<div class="space-y-sm glow-focus rounded-lg transition-shadow">
+<label class="block font-label-sm text-label-sm text-on-surface-variant">Card Number</label>
+<div class="relative">
+<span class="absolute left-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant">credit_card</span>
+<input class="w-full bg-[#050505] border border-surface-variant rounded-lg pl-12 pr-4 py-3 text-on-surface font-body-md focus:border-primary-container focus:ring-0 transition-colors tracking-widest" placeholder="0000 0000 0000 0000" type="text">
+<div class="absolute right-4 top-1/2 -translate-y-1/2 flex gap-1">
+<!-- Fake Card Icons -->
+<div class="w-8 h-5 bg-surface-variant rounded opacity-50"></div>
+<div class="w-8 h-5 bg-surface-variant rounded opacity-50"></div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div class="space-y-sm glow-focus rounded-lg transition-shadow">
+<label class="block font-label-sm text-label-sm text-on-surface-variant">Expiry Date</label>
+<input class="w-full bg-[#050505] border border-surface-variant rounded-lg px-4 py-3 text-on-surface font-body-md focus:border-primary-container focus:ring-0 transition-colors" placeholder="MM/YY" type="text">
+</div>
+<div class="space-y-sm glow-focus rounded-lg transition-shadow">
+<label class="block font-label-sm text-label-sm text-on-surface-variant">CVV</label>
+<div class="relative">
+<input class="w-full bg-[#050505] border border-surface-variant rounded-lg px-4 py-3 text-on-surface font-body-md focus:border-primary-container focus:ring-0 transition-colors" placeholder="123" type="text">
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-on-surface-variant cursor-help text-sm" title="3 digits on back of card">info</span>
+</div>
+</div>
+</div>
+</form>
+</div>
+</div>
+<!-- Order Summary Sidebar -->
+<div class="lg:col-span-4">
+<div class="bg-surface-container-low rounded-xl p-md md:p-lg inner-highlight sticky top-32"><div class="flex items-center gap-2 bg-surface-variant/30 border border-secondary-container/20 rounded-lg p-3 mb-md">
+    <span class="material-symbols-outlined text-secondary-container text-body-md">timer</span>
+    <div class="flex flex-col">
+        <span class="text-label-sm font-label-sm text-on-surface-variant opacity-70 uppercase tracking-wider">Seat Hold Period</span>
+        <span class="font-headline-md text-secondary-container text-body-md leading-none">09:59</span>
+    </div>
+</div>
+<h3 class="font-headline-md text-headline-md mb-md">Order Summary</h3>
+<div class="flex gap-md mb-md">
+<div class="w-24 h-36 rounded-lg bg-surface-container overflow-hidden inner-highlight shrink-0">
+<div class="bg-cover bg-center w-full h-full" data-alt="A cinematic movie poster for 'Neon Odyssey'. The artwork features a high-contrast cyberpunk cityscape illuminated by neon blues and hot pinks, bathed in rain. A lone figure stands in the foreground, silhouetted against the bright lights. The mood is tense and futuristic, perfectly fitting a high-end sci-fi IMAX experience. Deep blacks and vibrant accents dominate the color palette." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDcRywzHmojfGqukErKFIHH15sPpe4tts1PpUQ0gjbGYLmQ0cSDdu9_7-TeHEqfq5pZIYt-GUSbplPH9ym2ZoFlA39SAjn9x0d23DbPTXZUyXFAtJG2HYrBDKbPwpYYxdKU3M-qwwSgpuvf4q0g-gMV2SkdlRsccMntK4Mjb1_CXVtAxqC5M4WruSVLTQgiyCymqR8WHxTvJFxky6qlim5GpjjnzKwiMzXaIFcwzur_T9GZdOI_1F_fPw')"></div>
+</div>
+<div class="flex flex-col justify-center">
+<h4 class="font-headline-md text-headline-md leading-tight mb-1">Neon Odyssey</h4>
+<span class="inline-block bg-surface-variant text-on-surface-variant font-label-sm text-label-sm px-2 py-0.5 rounded text-xs mb-2 w-fit">IMAX 3D</span>
+</div>
+</div>
+<ul class="space-y-sm mb-lg border-y border-white/5 py-md">
+<li class="flex justify-between items-center">
+<span class="text-on-surface-variant flex items-center gap-2 font-label-sm text-label-sm"><span class="material-symbols-outlined text-sm">calendar_today</span> 22 Nov, 21:00</span>
+</li>
+<li class="flex justify-between items-center">
+<span class="text-on-surface-variant flex items-center gap-2 font-label-sm text-label-sm"><span class="material-symbols-outlined text-sm">location_on</span> Starlight Grand, Screen 4</span>
+</li>
+<li class="flex justify-between items-center">
+<span class="text-on-surface-variant flex items-center gap-2 font-label-sm text-label-sm"><span class="material-symbols-outlined text-sm">event_seat</span> Seats: C5, C6</span>
+</li>
+</ul>
+<div class="flex justify-between items-end mb-lg">
+<span class="font-body-md text-body-md text-on-surface-variant">Total Amount</span>
+<span class="font-headline-md text-headline-md text-secondary-container">$27.00</span>
+</div>
+<button class="w-full bg-primary-container text-on-primary-container font-label-bold text-label-bold uppercase py-4 rounded-lg hover:bg-inverse-primary transition-colors glow-hover flex items-center justify-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">lock</span>
+                        Pay Now
+                    </button>
+<div class="mt-4 flex items-center justify-center gap-2 text-on-surface-variant opacity-70">
+<span class="material-symbols-outlined text-sm">verified_user</span>
+<span class="text-xs font-label-sm text-label-sm">Payments are secure and encrypted</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container-lowest full-width border-t border-white/5 flex flex-col items-center justify-center py-lg px-margin-mobile md:px-margin-desktop w-full mt-xl">
+<div class="font-display-lg text-headline-md text-primary-container mb-4">CinemaSeat</div>
+<div class="flex gap-4 mb-4 font-label-sm text-label-sm text-on-surface-variant">
+<a class="hover:text-on-surface transition-colors hover:underline opacity-80 hover:opacity-100" href="#">About Us</a>
+<a class="hover:text-on-surface transition-colors hover:underline opacity-80 hover:opacity-100" href="#">Terms of Service</a>
+<a class="hover:text-on-surface transition-colors hover:underline opacity-80 hover:opacity-100" href="#">Privacy Policy</a>
+<a class="hover:text-on-surface transition-colors hover:underline opacity-80 hover:opacity-100" href="#">Contact Support</a>
+</div>
+<div class="font-label-sm text-label-sm text-on-surface-variant opacity-60">
+            © 2024 CinemaSeat. Premier Night Out Experience.
+        </div>
+</footer>
+
+
+</body></html>
