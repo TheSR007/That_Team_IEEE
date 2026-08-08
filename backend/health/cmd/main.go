@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
-	"github.com/TheSR007/That_Team_IEE/backend/internal/services/health"
+	"github.com/TheSR007/That_Team_IEE/backend/health"
 )
 
 func main() {

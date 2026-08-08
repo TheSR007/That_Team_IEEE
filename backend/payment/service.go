@@ -7,9 +7,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 
-	"github.com/TheSR007/That_Team_IEE/backend/internal/db/booking_db/store"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/pkg/mockgateway"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/pkg/redis"
+	"github.com/TheSR007/That_Team_IEE/backend/booking/db/store"
+	"github.com/TheSR007/That_Team_IEE/backend/pkg/mockgateway"
+	"github.com/TheSR007/That_Team_IEE/backend/pkg/redis"
 )
 
 type WebhookCallbackPayload struct {

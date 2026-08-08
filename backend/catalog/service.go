@@ -8,7 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"go.uber.org/zap"
 
-	"github.com/TheSR007/That_Team_IEE/backend/internal/db/catalog_db/store"
+	"github.com/TheSR007/That_Team_IEE/backend/catalog/db/store"
 )
 
 type MovieDTO struct {

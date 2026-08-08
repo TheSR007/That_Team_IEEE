@@ -11,11 +11,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	"github.com/TheSR007/That_Team_IEE/backend/internal/config"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/db/booking_db"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/db/booking_db/store"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/pkg/redis"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/services/booking"
+	"github.com/TheSR007/That_Team_IEE/backend/booking/db/store"
+	"github.com/TheSR007/That_Team_IEE/backend/payment"
+	"github.com/TheSR007/That_Team_IEE/backend/pkg/config"
+	"github.com/TheSR007/That_Team_IEE/backend/pkg/mockgateway"
+	"github.com/TheSR007/That_Team_IEE/backend/pkg/redis"
 )
 
 func main() {
@@ -28,16 +28,9 @@ func main() {
 	logger := zap.Must(zap.NewDevelopment())
 	defer logger.Sync()
 
-	logger.Info("Starting Booking Microservice...")
+	logger.Info("Starting Payment & OTP Microservice...")
 
-	// 1. Run DB migrations
-	if err := booking_db.RunMigrations(cfg.BookingDBURL); err != nil {
-		logger.Warn("Booking DB Migration notice", zap.Error(err))
-	} else {
-		logger.Info("Booking DB migrations executed successfully")
-	}
-
-	// 2. Initialize PostgreSQL connection pool
+	// 1. Initialize PostgreSQL connection pool (Booking DB)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -55,11 +48,11 @@ func main() {
 			logger.Warn("Failed to connect to Booking DB, fallback to mock store", zap.Error(err))
 		} else {
 			dbStore = store.New(pool)
-			logger.Info("Connected to Booking PostgreSQL DB Pool")
+			logger.Info("Connected to Booking PostgreSQL DB Pool for Payment processing")
 		}
 	}
 
-	// 3. Initialize Redis Client
+	// 2. Initialize Redis Client
 	redisClient, err := redis.NewClient(cfg.RedisURL)
 	if err != nil {
 		logger.Warn("Failed to connect to Redis, proceeding with DB fallback", zap.Error(err))
@@ -67,25 +60,29 @@ func main() {
 		logger.Info("Connected to Redis Lock Store")
 	}
 
-	// 4. Start gRPC Server (port 50052)
-	lis, err := net.Listen("tcp", ":50052")
+	// 3. Initialize Mock Gateway Client
+	gwClient := mockgateway.NewClient(cfg.GatewayURL)
+	logger.Info("Initialized Mock Gateway Client", zap.String("url", cfg.GatewayURL))
+
+	// 4. Start gRPC Server (port 50053)
+	lis, err := net.Listen("tcp", ":50053")
 	if err != nil {
-		logger.Warn("Failed to listen on gRPC port 50052", zap.Error(err))
+		logger.Warn("Failed to listen on gRPC port 50053", zap.Error(err))
 	} else {
-		logger.Info("Booking gRPC Server listening", zap.String("addr", lis.Addr().String()))
+		logger.Info("Payment gRPC Server listening", zap.String("addr", lis.Addr().String()))
 		// TODO: Register gRPC Protobuf Server
 	}
 
-	// 5. Start HTTP Engine (port 8082)
+	// 5. Start HTTP Engine (port 8083)
 	r := gin.Default()
 
 	apiV1 := r.Group("/api/v1")
-	svc := booking.NewService(dbStore, redisClient, cfg.HoldTTLSeconds, logger)
-	hdr := booking.NewHandler(svc)
+	svc := payment.NewService(dbStore, redisClient, gwClient, logger)
+	hdr := payment.NewHandler(svc)
 	hdr.RegisterRoutes(apiV1)
 
-	logger.Info("Booking HTTP Server listening on port 8082")
-	if err := r.Run(":8082"); err != nil {
+	logger.Info("Payment/OTP HTTP Server listening on port 8083")
+	if err := r.Run(":8083"); err != nil {
 		logger.Fatal("Failed to start HTTP server", zap.Error(err))
 	}
 }

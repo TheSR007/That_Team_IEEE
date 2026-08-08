@@ -12,10 +12,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
 
-	"github.com/TheSR007/That_Team_IEE/backend/internal/config"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/db/catalog_db"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/db/catalog_db/store"
-	"github.com/TheSR007/That_Team_IEE/backend/internal/services/catalog"
+	"github.com/TheSR007/That_Team_IEE/backend/catalog"
+	"github.com/TheSR007/That_Team_IEE/backend/catalog/db"
+	"github.com/TheSR007/That_Team_IEE/backend/catalog/db/store"
+	"github.com/TheSR007/That_Team_IEE/backend/pkg/config"
 )
 
 func main() {

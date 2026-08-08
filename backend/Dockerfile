@@ -7,24 +7,26 @@ FROM base AS deps
 COPY go.mod go.sum* ./
 RUN mkdir -p /go/pkg && (go mod download || true)
 
-# Stage 3: Development target (Runs go run with live reload)
+# Stage 3: Development target
 FROM base AS development
+ARG SERVICE=catalog
+ENV SERVICE=${SERVICE}
 COPY --from=deps /go/pkg /go/pkg
 COPY . .
-EXPOSE 8080
-CMD ["go", "run", "main.go"]
+CMD ["sh", "-c", "go run ./${SERVICE}/cmd/main.go"]
 
 # Stage 4: Production Builder
 FROM base AS builder
+ARG SERVICE=catalog
 COPY --from=deps /go/pkg /go/pkg
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o backend .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o app_binary ./${SERVICE}/cmd/main.go
 
-# Stage 5: Production Runner target (Runs compiled static binary in minimal image)
+# Stage 5: Production Runner target
 FROM alpine:3.19 AS production
 WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-COPY --from=builder /app/backend .
+COPY --from=builder /app/app_binary .
 USER appuser
 
 EXPOSE 8080
@@ -34,4 +36,4 @@ HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
 
 STOPSIGNAL SIGTERM
 
-CMD ["./backend"]
+CMD ["./app_binary"]
