@@ -18,13 +18,15 @@ type Config struct {
 }
 
 func LoadConfig() (*Config, error) {
-	_ = godotenv.Load()
-	_ = godotenv.Load(".env.example")
+	_ = godotenv.Load(".env", "../.env", "../../.env")
+	_ = godotenv.Load(".env.example", "../.env.example", "../../.env.example")
 
 	env := getEnv("ENV", "DEVELOPMENT")
-	port := getEnv("PORT", "8080")
-	db1URL := getEnv("CATALOG_DB_URL", "postgres://postgres:postgres@localhost:5432/cinemaseat_catalog?sslmode=disable")
-	db2URL := getEnv("BOOKING_DB_URL", "postgres://postgres:postgres@localhost:5432/cinemaseat_booking?sslmode=disable")
+	port := getEnv("PORT", "8081")
+	
+	defaultDB := "postgres://postgres:postgres@localhost:5432/cinemaseat_catalog?sslmode=disable"
+	db1URL := getEnv("CATALOG_DB_URL", getEnv("DATABASE_URL", defaultDB))
+	db2URL := getEnv("BOOKING_DB_URL", getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/cinemaseat_booking?sslmode=disable"))
 	redisURL := getEnv("REDIS_URL", "localhost:6379")
 	gatewayURL := getEnv("GATEWAY_URL", "http://localhost:9000")
 

@@ -29,7 +29,7 @@ services:
     networks:
       - frontend-net
     depends_on:
-      backend:
+      catalog:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
@@ -42,39 +42,33 @@ services:
           cpus: "1.0"
           memory: 512M
 
-  backend:
-    image: ${DOCKERHUB_USERNAME}/cinemaseat:backend-latest
-    pull_policy: always
-    container_name: cinemaseat-backend
+  catalog:
+    build:
+      context: ./backend/catalog
+      dockerfile: Dockerfile
+    container_name: cinemaseat-catalog
     restart: unless-stopped
+    ports:
+      - "8081:8081"
     environment:
-      PORT: 8080
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
-      REDIS_URL: redis://redis:6379
-      HOLD_TTL_SECONDS: ${HOLD_TTL_SECONDS}
-      GATEWAY_URL: http://gateway:9000
-      CALLBACK_BASE_URL: ${CALLBACK_BASE_URL}
+      PORT: 8081
+      CATALOG_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     networks:
-      - frontend-net
       - backend-net
       - db-net
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
-      gateway:
-        condition: service_started
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8081/health"]
       interval: 10s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 512M
+          cpus: "0.5"
+          memory: 256M
 
   postgres:
     image: postgres:16-alpine
