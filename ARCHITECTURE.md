@@ -1,126 +1,91 @@
-Here are the Mermaid.js system architecture and data flow diagrams for your Go Modular Monolith solution, formatted for direct inclusion in your `README.md` or architecture documentation.
+# System Architecture
 
----
-
-## High-Level System Architecture
+## High-Level Microservice Architecture
 
 ```mermaid
 flowchart TD
     subgraph Clients["Clients and Test Harness"]
-        UI["Web Frontend SPA"]
-        K6["k6 Load Generator"]
+        UI["Web Frontend / SPA"]
+        K6["k6 Load Generator / Judge Scripts"]
     end
 
-    subgraph Edge["Edge Layer"]
-        NGINX["Nginx Reverse Proxy"]
+    subgraph Proxy["Edge / Gateway Layer"]
+        NGINX["Nginx HTTP Proxy<br/>(Port 8080)"]
     end
 
-    subgraph Monolith["Go Modular Monolith Container"]
-        Router["HTTP and WS Router"]
-        Catalog["Catalog Module<br/>(Movies and Showtimes)"]
-        HoldEng["Hold and Reservation Engine<br/>(Atomic DB Locks)"]
-        PayMod["Payment and Webhook Processor<br/>(Idempotent)"]
-        OTPMod["OTP Proxy Module"]
-        WSHub["WebSocket Broadcast Hub"]
-        Worker["Hold Expiration Sweeper"]
+    subgraph Services["gRPC Microservices"]
+        Catalog["Catalog Service<br/>(gRPC Port 50051)"]
+        Booking["Booking Service<br/>(gRPC Port 50052)"]
+        Payment["Payment Service<br/>(gRPC Port 50053)"]
+        OTP["OTP Service<br/>(gRPC Port 50054)"]
     end
 
-    subgraph Storage["Persistence Layer"]
-        DB[(PostgreSQL Database)]
+    subgraph Storage["Persistence & External Dependencies"]
+        PG[(PostgreSQL)]
+        REDIS[(Redis Cache & Locks)]
+        MOCKGW["Mock Gateway<br/>(Port 9000)"]
     end
 
-    subgraph Gateway["External Dependency"]
-        MockGW["Mock Gateway Container<br/>(Port 9000)"]
-    end
+    UI -->|HTTP REST / JSON| NGINX
+    K6 -->|HTTP REST / JSON| NGINX
 
-    UI -->|HTTP / WS| NGINX
-    K6 -->|HTTP Requests| NGINX
-    NGINX -->|Proxy Traffic| Router
+    NGINX -->|gRPC| Catalog
+    NGINX -->|gRPC| Booking
+    NGINX -->|gRPC| Payment
+    NGINX -->|gRPC| OTP
 
-    Router --> Catalog
-    Router --> HoldEng
-    Router --> PayMod
-    Router --> OTPMod
-    Router --> WSHub
-
-    Catalog -->|Read| DB
-    HoldEng -->|Atomic UPDATE| DB
-    PayMod -->|Record Booking| DB
-    Worker -->|Sweep Expired Holds| DB
-
-    HoldEng -.->|Event Broadcast| WSHub
-    PayMod -.->|Event Broadcast| WSHub
-    Worker -.->|Event Broadcast| WSHub
-
-    PayMod -->|1. Async POST /charge| MockGW[cite: 1]
-    OTPMod -->|POST /otp/send and /verify| MockGW[cite: 1]
-    MockGW -.->|2. Async Callback POST /callback| PayMod[cite: 1]
+    Catalog --> PG
+    Booking --> PG
+    Booking --> REDIS
+    Payment --> PG
+    Payment --> REDIS
+    Payment --> MOCKGW
+    OTP --> REDIS
+    OTP --> MOCKGW
 ```
 
 ---
 
-## Detailed Data Flow Sequences
+## Topology Diagram
 
-### 1. Atomic Seat Hold Flow (Scenario A: 100 Concurrent Requests)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User / k6 Script
-    participant API as Go REST API
-    participant DB as PostgreSQL
-    participant WS as WebSocket Hub
-
-    User->>API: POST /api/v1/holds { showtime_id, seat_number: "F12" }
-    Note over API,DB: Executes Atomic Single-Query Transaction
-    API->>DB: UPDATE seats SET status = 'HELD' WHERE status = 'AVAILABLE'
-
-    alt Seat Was Available (Rows Affected == 1)
-        DB-->>API: 1 Row Updated
-        API->>DB: INSERT INTO seat_holds (expires_at = NOW() + HOLD_TTL_SECONDS)
-        API-->>User: 201 Created { hold_id, expires_at }
-        API->>WS: Broadcast Event: "SEAT_STATUS_CHANGED (F12: HELD)"
-    else Seat Already Held/Booked (Rows Affected == 0)
-        DB-->>API: 0 Rows Updated
-        API-->>User: 409 Conflict { error: "SEAT_UNAVAILABLE" }
-    end
-
+```
+                                [ External Clients / Frontend / Judge Scripts ]
+                                                       │
+                                                       │ (HTTP REST / JSON)
+                                                       ▼
+                                            ┌─────────────────────┐
+                                            │        nginx        │ (HTTP - Port 8080)
+                                            └──────────┬──────────┘
+                                                       │
+                     ┌───────────────────┬─────────────┴─────┬───────────────────┐
+                     │ (gRPC)            │ (gRPC)            │ (gRPC)            │ (gRPC)
+                     ▼                   ▼                   ▼                   ▼
+           ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+           │ Catalog Service │ │ Booking Service │ │ Payment Service │ │   OTP Service   │
+           │  (gRPC 50051)   │ │  (gRPC 50052)   │ │  (gRPC 50053)   │ │  (gRPC 50054)   │
+           └────────┬────────┘ └────────┬────────┘ └────────┬────────┘ └────────┬────────┘
+                    │                   │                   │                   │
+                    └─────────┬─────────┴───────────┬───────┴───────────────────│
+                              ▼                     ▼                           ▼
+                       ┌──────────────┐      ┌──────────────┐            ┌──────────────┐
+                       │  PostgreSQL  │      │    Redis     │            │ Mock Gateway │
+                       └──────────────┘      └──────────────┘            └──────────────┘
 ```
 
 ---
 
-## Architectural Breakdown & Security Isolation
+## Service Specifications
 
-### 1. Nginx Reverse Proxy
+### 1. Reverse Proxy / Gateway Layer
+- **Nginx HTTP Entrypoint (Port 8080)**: Receives external HTTP REST requests (JSON payloads) from frontends and judge scripts. Translates and routes calls to specific internal microservices over gRPC protocol.
 
-- Exposes a single unified entrypoint on port `80`.
+### 2. Microservice Layer (gRPC Decoupled)
+- **Catalog Service (`gRPC 50051`)**: Manages movie listings, showtime details, and seat map queries. Connects directly to PostgreSQL.
+- **Booking Service (`gRPC 50052`)**: Handles seat reservations and hold logic. Uses Redis (`SETNX`) for atomic distributed locking and PostgreSQL for persistent booking records.
+- **Payment Service (`gRPC 50053`)**: Manages transaction charges, idempotency check via Redis, and callback webhooks. Interacts with PostgreSQL, Redis, and Mock Gateway.
+- **OTP Service (`gRPC 50054`)**: Handles OTP generation, verification, and dispatch via Mock Gateway and Redis.
 
-- Routes REST traffic (`/api/v1/*`) and proxies WebSocket connections (`/ws/*`) with `Upgrade` and `Connection` HTTP headers.
-
-### 2. Go Monolith Internal Domains
-
-- **Catalog Module**: Serves static movie, showtime, and seat map queries directly from PostgreSQL read queries.
-
-- **Hold Engine**: Enforces atomic state transitions using single `UPDATE ... WHERE status = 'AVAILABLE'` statements. This guarantees zero oversell when multiple threads compete for seat `F12`.
-
-- **Payment & Webhook Processor**:
-- Calls `POST /charge` on the gateway asynchronously without blocking the user request.
-
-- Listens on `POST /api/v1/payments/callback` for gateway webhooks. Processes payload inside a DB transaction and logs the `event_id` into `webhook_events` to ignore duplicate deliveries. Always returns `200 OK`.
-
-- **Hold Expiration Sweeper**: A background Go goroutine running on a ticker interval (e.g., every 1 second) that executes:
-
-```sql
-UPDATE seats
-SET status = 'AVAILABLE'
-WHERE status = 'HELD' AND id IN (
-    SELECT hold_id FROM seat_holds WHERE expires_at < NOW()
-);
-
-```
-
-### 3. Fault Isolation Guarantee
-
-- If the `mock-gateway` container stops, crashes, or returns `500` errors, the Go Monolith catches the network transport error.
-
-- Catalog browsing, seat map queries, seat holding, and the `/health` endpoint continue executing cleanly without dependency on the gateway.
+### 3. Data & External Layer
+- **PostgreSQL**: Primary relational storage for movies, showtimes, seats, holds, and bookings.
+- **Redis**: Fast key-value store for atomic locks (`HOLD_TTL_SECONDS`), seatmap caching, and idempotency deduplication.
+- **Mock Gateway (Port 9000)**: External gateway dependency providing payment processing (`/charge`) and OTP delivery (`/otp/send`, `/otp/verify`).
