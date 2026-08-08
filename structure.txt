@@ -1,0 +1,71 @@
+final micro + grpc arch
+                                [ External Clients / Frontend / Judge Scripts ]
+                                                       │
+                                                       │ (HTTP REST / Port 8080)
+                                                       ▼
+                                            ┌─────────────────────┐
+                                            │ Nginx Reverse Proxy │ (Port 8080)
+                                            └──────────┬──────────┘
+                                                       │
+         ┌───────────────────┬─────────────────────────┼─────────────────────────┬───────────────────┐
+         │ (HTTP /api/v1/...)│ (HTTP /api/v1/...)      │ (HTTP /api/v1/...)      │ (HTTP /api/v1/...)│
+         ▼                   ▼                         ▼                         ▼                   ▼
+┌─────────────────┐ ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐ ┌─────────────────┐
+│ Catalog Service │ │ Booking Service │       │ Payment Service │       │   OTP Service   │ │ Health Service  │
+│   (Port 8081)   │ │   (Port 8082)   │       │   (Port 8083)   │       │   (Port 8084)   │ │   (Port 8085)   │
+└────────┬────────┘ └────────┬────────┘       └────────┬────────┘       └────────┬────────┘ └─────────────────┘
+         │                   │                         │                         │
+         │                   │ ◄─── (gRPC Inter-service) ──►                         │
+         ▼                   ▼                         ▼                         ▼
+┌─────────────────┐ ┌───────────────────────────────────────────┐       ┌─────────────────┐
+│  DB 1: PostgreSQL│ │            DB 2: PostgreSQL               │       │   DB 3: Redis   │
+│ (Catalog DB)    │ │              (Booking DB)                 │       │  (Lock/TTL DB)  │
+├─────────────────┤ ├───────────────────────────────────────────┤       ├─────────────────┤
+│ • movies        │ │ • showtime_seats (Atomic Row Locks)       │       │ • Distributed   │
+│ • theatres      │ │ • bookings                                │       │   Hold Locks    │
+│ • halls         │ │ • booking_seats                           │       │ • Seatmap Cache │
+│ • seats         │ │ • payments (Idempotent last_event_id)     │       │ • OTP Codes     │
+│ • showtimes     │ │                                           │       │   (5m TTL)      │
+└─────────────────┘ └───────────────────────────────────────────┘       └─────────────────┘
+
+final project structure:
+
+backend/
+├── nginx/
+│   └── nginx.conf                  # Nginx Reverse Proxy config
+├── proto/                          # Protobuf contracts for gRPC
+│   ├── catalog/v1/catalog.proto
+│   ├── booking/v1/booking.proto
+│   └── payment/v1/payment.proto
+├── gen/                            # Generated gRPC Go code
+│   └── go/
+├── cmd/                            # Microservice Binaries
+│   ├── catalog/                    # Catalog Service (Port 8081, gRPC 50051)
+│   │   └── main.go
+│   ├── booking/                    # Booking Service (Port 8082, gRPC 50052)
+│   │   └── main.go
+│   ├── payment/                    # Payment Service (Port 8083, gRPC 50053)
+│   │   └── main.go
+│   └── otp/                        # OTP Service (Port 8084, gRPC 50054)
+│       └── main.go
+├── internal/
+│   ├── config/                     # Env loader (DB1_URL, DB2_URL, REDIS_URL)
+│   ├── db/
+│   │   ├── catalog_db/             # Catalog DB migrations & sqlc store
+│   │   │   ├── migration/
+│   │   │   └── store/
+│   │   └── booking_db/             # Booking DB migrations & sqlc store
+│   │       ├── migration/
+│   │       └── store/
+│   ├── pkg/
+│   │   ├── redis/                  # Shared Redis client wrapper
+│   │   └── mockgateway/            # HTTP client for mock gateway container
+│   └── services/                   # Business logic for microservices
+│       ├── catalog/
+│       ├── booking/
+│       ├── payment/
+│       └── otp/
+├── docker-compose.yml
+├── sqlc.yaml
+├── go.mod
+└── go.sum
