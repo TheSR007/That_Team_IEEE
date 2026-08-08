@@ -1,0 +1,7 @@
+# Files without extension
+*
+!*.*
+!*/
+
+# Environment file
+.env
