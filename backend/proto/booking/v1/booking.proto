@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package booking.v1;
+
+option go_package = "github.com/TheSR007/That_Team_IEE/backend/gen/go/booking/v1;bookingv1";
+
+// BookingService is called by the Payment Service after a payment callback
+// to confirm or fail a booking.
+service BookingService {
+  // ConfirmBooking marks a booking as CONFIRMED and seats as BOOKED.
+  // Called by Payment Service after SUCCEEDED callback.
+  rpc ConfirmBooking(ConfirmBookingRequest) returns (BookingStatusReply);
+
+  // FailBooking marks a booking as FAILED and releases the seats.
+  // Called by Payment Service after FAILED callback.
+  rpc FailBooking(FailBookingRequest) returns (BookingStatusReply);
+}
+
+message ConfirmBookingRequest {
+  string booking_ref = 1;
+  string event_id    = 2; // for idempotency logging
+}
+
+message FailBookingRequest {
+  string booking_ref = 1;
+  string event_id    = 2;
+}
+
+message BookingStatusReply {
+  string booking_ref = 1;
+  string status      = 2; // CONFIRMED | FAILED
+  bool   ok          = 3;
+}

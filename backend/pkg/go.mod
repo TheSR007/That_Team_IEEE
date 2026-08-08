@@ -1,0 +1,8 @@
+module github.com/TheSR007/That_Team_IEE/backend/pkg
+
+go 1.26.5
+
+require (
+	github.com/joho/godotenv v1.5.1
+	github.com/redis/go-redis/v9 v9.22.0
+)

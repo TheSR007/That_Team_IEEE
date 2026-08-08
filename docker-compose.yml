@@ -1,6 +1,5 @@
 # CinemaSeat - Production Docker Compose
 # Usage: docker compose up -d
-# Images are pulled from Docker Hub — pushed by the CD pipeline
 
 networks:
   frontend-net:
@@ -20,6 +19,8 @@ services:
     pull_policy: always
     container_name: cinemaseat-frontend
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -29,8 +30,8 @@ services:
     networks:
       - frontend-net
     depends_on:
-      catalog:
-        condition: service_healthy
+      nginx:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 10s
@@ -42,10 +43,33 @@ services:
           cpus: "1.0"
           memory: 512M
 
+  nginx:
+    build:
+      context: ./backend/nginx
+      dockerfile: Dockerfile
+    container_name: cinemaseat-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - frontend-net
+      - backend-net
+    depends_on:
+      - catalog
+      - booking
+      - payment
+      - health
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
+
   catalog:
     build:
-      context: ./backend/catalog
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: catalog/Dockerfile
+      target: production
     container_name: cinemaseat-catalog
     restart: unless-stopped
     ports:
@@ -70,6 +94,113 @@ services:
           cpus: "0.5"
           memory: 256M
 
+  booking:
+    build:
+      context: ./backend
+      dockerfile: booking/Dockerfile
+      target: production
+    container_name: cinemaseat-booking
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+      - "50052:50052"
+    environment:
+      PORT: 8082
+      BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis:6379
+      HOLD_TTL_SECONDS: ${HOLD_TTL_SECONDS:-120}
+    networks:
+      - backend-net
+      - db-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8082/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  payment:
+    build:
+      context: ./backend
+      dockerfile: payment/Dockerfile
+      target: production
+    container_name: cinemaseat-payment
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+      - "50053:50053"
+    environment:
+      PORT: 8083
+      BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis:6379
+      GATEWAY_URL: http://gateway:9000
+      BOOKING_GRPC_ADDR: booking:50052
+      CALLBACK_BASE_URL: http://nginx:8080
+    networks:
+      - backend-net
+      - db-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      booking:
+        condition: service_started
+      gateway:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8083/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+
+  health:
+    build:
+      context: ./backend
+      dockerfile: health-service/Dockerfile
+      target: production
+    container_name: cinemaseat-health
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    environment:
+      PORT: 8085
+      CATALOG_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis:6379
+      GATEWAY_URL: http://gateway:9000
+    networks:
+      - backend-net
+      - db-net
+    depends_on:
+      - catalog
+      - booking
+      - payment
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8085/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 128M
+
   postgres:
     image: postgres:16-alpine
     container_name: cinemaseat-postgres
@@ -78,6 +209,9 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/booking/db/migration:/docker-entrypoint-initdb.d:ro
     networks:
       - db-net
     healthcheck:
@@ -115,6 +249,8 @@ services:
     image: asifmahmoud414/mock-gateway:latest
     container_name: cinemaseat-gateway
     restart: unless-stopped
+    ports:
+      - "9000:9000"
     networks:
       - backend-net
     deploy:

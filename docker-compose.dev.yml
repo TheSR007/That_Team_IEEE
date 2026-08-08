@@ -21,29 +21,135 @@ services:
       PORT: 3000
       HOSTNAME: "0.0.0.0"
       VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
-      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY:-pk_test_dummy}
+      VITE_CLERK_PUBLISHABLE_KEY: ${VITE_CLERK_PUBLISHABLE_KEY}
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
       interval: 10s
       timeout: 5s
       retries: 5
 
+  nginx:
+    build:
+      context: ./backend/nginx
+      dockerfile: Dockerfile
+    container_name: cinemaseat-nginx-dev
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      - catalog
+      - booking
+      - payment
+      - health
+
   catalog:
     build:
-      context: ./backend/catalog
-      dockerfile: Dockerfile
+      context: ./backend
+      dockerfile: catalog/Dockerfile
+      target: development
     container_name: cinemaseat-catalog-dev
     restart: unless-stopped
     ports:
       - "8081:8081"
+    volumes:
+      - ./backend:/app
     environment:
       PORT: 8081
-      CATALOG_DB_URL: postgres://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-secret}@postgres:5432/${POSTGRES_DB:-cinemaseat}?sslmode=disable
+      CATALOG_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  booking:
+    build:
+      context: ./backend
+      dockerfile: booking/Dockerfile
+      target: development
+    container_name: cinemaseat-booking-dev
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+      - "50052:50052"
+    volumes:
+      - ./backend:/app
+    environment:
+      PORT: 8082
+      BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cinemaseat_booking}?sslmode=disable
+      REDIS_URL: redis:6379
+      HOLD_TTL_SECONDS: ${HOLD_TTL_SECONDS:-120}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8082/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  payment:
+    build:
+      context: ./backend
+      dockerfile: payment/Dockerfile
+      target: development
+    container_name: cinemaseat-payment-dev
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+      - "50053:50053"
+    volumes:
+      - ./backend:/app
+    environment:
+      PORT: 8083
+      BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cinemaseat_booking}?sslmode=disable
+      REDIS_URL: redis:6379
+      GATEWAY_URL: http://gateway:9000
+      BOOKING_GRPC_ADDR: booking:50052
+      CALLBACK_BASE_URL: http://nginx:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      booking:
+        condition: service_started
+      gateway:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8083/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  health:
+    build:
+      context: ./backend
+      dockerfile: health-service/Dockerfile
+      target: development
+    container_name: cinemaseat-health-dev
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    volumes:
+      - ./backend:/app
+    environment:
+      PORT: 8085
+      CATALOG_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      BOOKING_DB_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-cinemaseat_booking}?sslmode=disable
+      REDIS_URL: redis:6379
+      GATEWAY_URL: http://gateway:9000
+    depends_on:
+      - catalog
+      - booking
+      - payment
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8085/health"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -55,11 +161,13 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
-      POSTGRES_DB: ${POSTGRES_DB:-cinemaseat}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-cinemaseat_booking}
+    volumes:
+      - ./backend/booking/db/migration:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-cinemaseat}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-cinemaseat_booking}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -82,4 +190,3 @@ services:
     restart: unless-stopped
     ports:
       - "${GATEWAY_PORT:-9000}:9000"
-

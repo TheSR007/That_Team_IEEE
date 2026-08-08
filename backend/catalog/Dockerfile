@@ -1,22 +1,35 @@
-# Stage 1: Build stage
-FROM golang:1.22-alpine AS builder
+# Stage 1: Base image
+FROM golang:1.26-alpine AS base
 WORKDIR /app
-ENV GOTOOLCHAIN=auto
 
-# Download dependencies
-COPY go.mod go.sum* ./
-RUN go mod download
+# Stage 2: Dependencies
+FROM base AS deps
+COPY catalog/go.mod catalog/go.sum* ./catalog/
+COPY pkg/go.mod pkg/go.sum* ./pkg/
+RUN mkdir -p /go/pkg && (go mod download || true)
 
-# Copy source code and build binary
+# Stage 3: Development target
+FROM base AS development
+ARG SERVICE=catalog
+ENV SERVICE=${SERVICE}
+COPY --from=deps /go/pkg /go/pkg
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o catalog ./cmd/main.go
+WORKDIR /app/catalog
+CMD ["sh", "-c", "go run ./cmd/main.go"]
 
-# Stage 2: Production runner stage
-FROM alpine:3.19
+# Stage 4: Production Builder
+FROM base AS builder
+ARG SERVICE=catalog
+COPY --from=deps /go/pkg /go/pkg
+COPY . .
+WORKDIR /app/catalog
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o app_binary ./cmd/main.go
+
+# Stage 5: Production Runner target
+FROM alpine:3.19 AS production
 WORKDIR /app
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-
-COPY --from=builder /app/catalog .
+COPY --from=builder /app/catalog/app_binary .
 USER appuser
 
 EXPOSE 8081
@@ -26,4 +39,4 @@ HEALTHCHECK --interval=15s --timeout=3s --retries=3 \
 
 STOPSIGNAL SIGTERM
 
-CMD ["./catalog"]
+CMD ["./app_binary"]
