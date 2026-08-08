@@ -3,6 +3,9 @@
 !*.*
 !*/
 
+# Exclude dockerfile
+!Dockerfile
+
 # Environment file
 .env
 .env.local
