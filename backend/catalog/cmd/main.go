@@ -13,9 +13,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/TheSR007/That_Team_IEE/backend/catalog"
+	"github.com/TheSR007/That_Team_IEE/backend/catalog/config"
 	"github.com/TheSR007/That_Team_IEE/backend/catalog/db"
 	"github.com/TheSR007/That_Team_IEE/backend/catalog/db/store"
-	"github.com/TheSR007/That_Team_IEE/backend/catalog/config"
+	"github.com/TheSR007/That_Team_IEE/backend/catalog/healthclient"
 )
 
 func main() {
@@ -29,6 +30,20 @@ func main() {
 	defer logger.Sync()
 
 	logger.Info("Starting Catalog Microservice...")
+
+	// Initialize gRPC Health Client Server
+	healthCtx, healthCancel := context.WithCancel(context.Background())
+	defer healthCancel()
+
+	healthSrv := healthclient.NewServer(
+		healthclient.WithLogger(logger),
+	)
+	if err := healthSrv.Start(healthCtx); err != nil {
+		logger.Warn("Failed to start health client gRPC server", zap.Error(err))
+	} else {
+		logger.Info("Health gRPC server started", zap.String("addr", healthSrv.Addr()))
+		defer healthSrv.Stop()
+	}
 
 	// 1. Run DB migrations
 	if err := db.RunMigrations(cfg.CatalogDBURL); err != nil {
@@ -53,11 +68,15 @@ func main() {
 		pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 		if err != nil {
 			logger.Warn("Failed to connect to Catalog DB, fallback to mock store", zap.Error(err))
+			healthSrv.SetServingStatus("database", false)
 		} else {
 			dbStore = store.New(pool)
 			logger.Info("Connected to Catalog PostgreSQL DB Pool")
+			healthSrv.SetServingStatus("database", true)
 		}
 	}
+
+	healthSrv.SetServingStatus("catalog", true)
 
 	// 3. Start gRPC Server (port 50051)
 	lis, err := net.Listen("tcp", ":50051")
@@ -72,7 +91,11 @@ func main() {
 	r := gin.Default()
 
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "UP", "service": "catalog"})
+		c.JSON(http.StatusOK, gin.H{
+			"status":           "UP",
+			"service":          "catalog",
+			"grpc_health_addr": healthSrv.Addr(),
+		})
 	})
 
 	apiV1 := r.Group("/api/v1")
