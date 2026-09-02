@@ -2,6 +2,12 @@ module github.com/TheSR007/That_Team_IEE/backend/gen
 
 go 1.26.5
 
+require google.golang.org/grpc v1.83.1
+
 require (
-	google.golang.org/grpc v1.65.0
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
 )
